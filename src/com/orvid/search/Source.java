@@ -32,6 +32,27 @@ public abstract class Source {
     public static volatile boolean adultUnlocked;
     static final java.util.Map<Integer, Source> BY_SERVICE = new java.util.concurrent.ConcurrentHashMap<>();
     public String script;
+    public String orientation;
+    private final java.util.Set<String> topics = new java.util.HashSet<>();
+    private static final java.util.Set<String> GENERIC = new java.util.HashSet<>(java.util.Arrays.asList(
+            "porn", "porno", "tube", "sex", "sexy", "xxx", "video", "videos", "vid", "vids", "movie", "movies", "clip",
+            "clips", "free", "hot", "top", "best", "new", "fuck", "fap", "lust", "home", "files", "you", "the"));
+
+    public Source topics(java.util.Collection<String> values) {
+        for (String v : values) topics.add(Query.fold(v).trim());
+        return this;
+    }
+
+    public boolean about(String term) {
+        if (term.length() < 3 || GENERIC.contains(term)) return false;
+        if (topics.contains(term)) return true;
+        return adult && Query.fold(name).replaceAll("[^\\p{L}\\p{N}]", "").contains(term);
+    }
+
+    static boolean about(String term, StreamInfoItem item) {
+        Source s = BY_SERVICE.get(item.getServiceId());
+        return s != null && s.about(term);
+    }
 
     public Source script(String value) {
         script = value;

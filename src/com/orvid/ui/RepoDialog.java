@@ -93,6 +93,7 @@ final class RepoDialog {
         chips.setOrientation(LinearLayout.HORIZONTAL);
         String[][] suggested = {
                 {a.getString(R.string.repo_official), Repos.OFFICIAL},
+                {"Orvid films", Repos.FILMS},
                 {"Orvid secret (18+)", Repos.SECRET},
         };
         for (String[] s : suggested) {

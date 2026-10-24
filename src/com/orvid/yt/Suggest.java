@@ -1,5 +1,6 @@
 package com.orvid.yt;
 
+import com.orvid.net.Streams;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonParser;
 import com.orvid.net.Fetch;
@@ -40,7 +41,7 @@ public final class Suggest {
             c.setConnectTimeout(6000);
             c.setReadTimeout(6000);
             try (java.io.InputStream in = c.getInputStream()) {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                return new String(Streams.readAll(in), StandardCharsets.UTF_8);
             }
         });
         int a = text.indexOf('(');

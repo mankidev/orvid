@@ -22,14 +22,29 @@ public final class Subtitles {
             if (c.language.equals(mine) || c.language.startsWith(mine + "-")) return all;
             if (base == null || base.auto && !c.auto) base = c;
         }
-        if (base != null && !com.orvid.net.Fetch.torMode()) {
+        if (base != null) {
             Visionos.Caption t = new Visionos.Caption();
             t.language = mine;
-            t.name = context.getString(R.string.subtitle_translated,
-                    Locale.getDefault().getDisplayLanguage(Locale.getDefault()));
-            t.url = base.url + "&tlang=" + mine;
+            t.name = translatedName(context);
+            t.url = com.orvid.net.Fetch.torMode() ? SubTranslate.uri(base.url, mine) : base.url + "&tlang=" + mine;
             all.add(t);
         }
         return all;
+    }
+
+    public static void addTranslation(Context context, Direct d) {
+        if (d.subtitles.isEmpty()) return;
+        String mine = Locale.getDefault().getLanguage();
+        Direct.Subtitle base = null;
+        for (Direct.Subtitle s : d.subtitles) {
+            String l = s.language == null ? "" : s.language;
+            if (l.equals(mine) || l.startsWith(mine + "-") || SubTranslate.handles(s.url)) return;
+            if (base == null || "en".equals(l) && !"en".equals(base.language)) base = s;
+        }
+        d.subtitles.add(new Direct.Subtitle(SubTranslate.uri(base.url, mine), mine, translatedName(context)));
+    }
+
+    private static String translatedName(Context context) {
+        return context.getString(R.string.subtitle_translated, Locale.getDefault().getDisplayLanguage(Locale.getDefault()));
     }
 }

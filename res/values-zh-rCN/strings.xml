@@ -157,4 +157,25 @@
     <string name="up_next">%1$d 秒后播放：%2$s
 点按取消</string>
     <string name="block_screenshots">禁止截屏和录屏</string>
+    <string name="published">发布时间：%1$s</string>
+    <string name="add">添加</string>
+    <string name="add_by_ip">通过 IP 地址添加电视</string>
+    <string name="cast">投屏</string>
+    <string name="cast_to">投屏到</string>
+    <string name="searching">正在查找此 Wi-Fi 网络中的电视</string>
+    <string name="stop_casting">停止投屏</string>
+    <string name="volume">音量</string>
+    <string name="casting_channel">投屏</string>
+    <string name="casting_to">正在投屏到 %1$s</string>
+    <string name="connected_to">已连接到 %1$s</string>
+    <string name="connecting_to">正在连接 %1$s</string>
+    <string name="ended_on">已在 %1$s 上播完</string>
+    <string name="loading_on">正在 %1$s 上加载</string>
+    <string name="no_devices">还没有找到电视。请确认电视已开机并连接同一 Wi-Fi。</string>
+    <string name="paused_on">已在 %1$s 上暂停</string>
+    <string name="playing_on">正在 %1$s 上播放</string>
+    <string name="pause">暂停</string>
+    <string name="invalid_ip">请输入 IP 地址，例如 192.168.1.20</string>
+    <string name="cast_unsupported">此视频无法发送到电视</string>
+    <string name="cast_failed">无法开始投屏：%1$s</string>
 </resources>

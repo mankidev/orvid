@@ -9,9 +9,27 @@ import java.util.List;
 public final class Ranker {
 
     private static final double LOOSE = -2;
+    private static final double JITTER = 0.15;
+    private static volatile long seed = new java.util.Random().nextLong();
+
+    public static void reseed() {
+        seed = new java.util.Random().nextLong();
+    }
+
+    private static double jitter(StreamInfoItem item) {
+        long h = seed ^ (item.getUrl() == null ? 0 : item.getUrl().hashCode()) * 0x9E3779B97F4A7C15L;
+        h ^= h >>> 33;
+        h *= 0xff51afd7ed558ccdL;
+        h ^= h >>> 33;
+        return 1 + JITTER * ((h >>> 11) * 0x1.0p-53 * 2 - 1);
+    }
     private static final int MIN_STRICT = 3;
     private static final double POPULARITY = 1.5;
     private static final double FOREIGN_SCRIPT = 8.0;
+    private static final double MIXED_SCRIPT_SHARE = 0.15;
+    private static final double SOURCE_FLOOR = 0.5;
+    private static final long FEW_VIEWS = 1000;
+    private static final double FEW_VIEWS_PENALTY = 3.0;
     private static final double EXACT_CHANNEL = 6.0;
 
     private static String compact(String folded) {
@@ -80,7 +98,7 @@ public final class Ranker {
                 if (literal && s >= 0 && (!mentions(q, item) || partial)) s = LOOSE;
                 com.orvid.app.DevInfo.rank(item, src, rank, s);
                 if (s >= 0) {
-                    Scored kept = new Scored(item, s, order++);
+                    Scored kept = new Scored(item, s * jitter(item), order++);
                     kept.covered = coverage(q, item);
                     all.add(kept);
                     strictBySource[src]++;
@@ -91,7 +109,8 @@ public final class Ranker {
                 }
             }
         }
-        Collections.sort(all, (a, b) -> a.score != b.score ? Double.compare(b.score, a.score) : a.order - b.order);
+        Collections.sort(all, (a, b) -> a.covered != b.covered ? b.covered - a.covered
+                : a.score != b.score ? Double.compare(b.score, a.score) : a.order - b.order);
         List<StreamInfoItem> out = diversify(all);
         List<Scored> loose = new ArrayList<>();
         for (int k = 0; k < sources.size(); k++) {
@@ -141,7 +160,7 @@ public final class Ranker {
         List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
         int n = 0;
         for (String t : q.terms) {
-            if (contains(words, t) || contains(channel, t) || Query.acronym(t, words)) n++;
+            if (contains(words, t) || contains(channel, t) || Query.acronym(t, words) || Source.about(t, item)) n++;
         }
         return n;
     }
@@ -151,7 +170,7 @@ public final class Ranker {
         List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
         List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
         for (String t : q.terms) {
-            if (contains(words, t) || contains(channel, t) || Query.acronym(t, words)) return true;
+            if (contains(words, t) || contains(channel, t) || Query.acronym(t, words) || Source.about(t, item)) return true;
         }
         return false;
     }
@@ -434,7 +453,7 @@ public final class Ranker {
         int anchoredMatched = 0;
         for (String t : q.terms) {
             boolean inTitle = contains(titleWords, t) || Query.acronym(t, titleWords);
-            boolean inChannel = contains(channelWords, t);
+            boolean inChannel = contains(channelWords, t) || !inTitle && Source.about(t, item);
             if (inTitle) s += 3;
             if (inChannel) s += 2;
             if (inTitle || inChannel) {
@@ -468,8 +487,14 @@ public final class Ranker {
         s += 6.0 * weight / (1 + rank * 0.35);
         Double popular = ctx.popularity.get(item);
         s += (popular != null ? popular : ctx.unknownPopularity) * POPULARITY;
-        if (!Query.script(item.getName() == null ? "" : item.getName()).equals(q.script())) {
+        s *= SOURCE_FLOOR + (1 - SOURCE_FLOOR) * weight;
+        if (item.getViewCount() >= 0 && item.getViewCount() < FEW_VIEWS) s -= FEW_VIEWS_PENALTY;
+        String name = item.getName() == null ? "" : item.getName();
+        if (!Query.script(name).equals(q.script())) {
             s = Math.max(0, s - FOREIGN_SCRIPT);
+        } else {
+            double share = Query.foreignShare(name, q.script());
+            if (share >= MIXED_SCRIPT_SHARE) s = Math.max(0, s - FOREIGN_SCRIPT * Math.min(1, share * 2));
         }
         return s;
     }
@@ -559,7 +584,8 @@ public final class Ranker {
                 all.add(new Scored(item, s, order++));
             }
         }
-        Collections.sort(all, (a, b) -> a.score != b.score ? Double.compare(b.score, a.score) : a.order - b.order);
+        Collections.sort(all, (a, b) -> a.covered != b.covered ? b.covered - a.covered
+                : a.score != b.score ? Double.compare(b.score, a.score) : a.order - b.order);
         List<StreamInfoItem> out = new ArrayList<>(all.size());
         for (Scored s : all) out.add(s.item);
         for (int i = 0; out.size() < minimum && i < weak.size(); i++) {

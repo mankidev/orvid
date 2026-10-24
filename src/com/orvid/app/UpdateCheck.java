@@ -1,5 +1,6 @@
 package com.orvid.app;
 
+import com.orvid.net.Streams;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -37,7 +38,7 @@ public final class UpdateCheck {
                     c.setRequestProperty("User-Agent", Fetch.USER_AGENT);
                     c.setRequestProperty("Accept", "application/vnd.github+json");
                     try (java.io.InputStream in = c.getInputStream()) {
-                        return JsonParser.object().from(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                        return JsonParser.object().from(new String(Streams.readAll(in), StandardCharsets.UTF_8));
                     }
                 });
                 prefs.edit().putLong("update_checked", System.currentTimeMillis()).apply();

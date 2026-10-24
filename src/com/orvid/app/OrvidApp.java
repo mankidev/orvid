@@ -1,5 +1,6 @@
 package com.orvid.app;
 
+import com.orvid.net.Streams;
 import android.app.Application;
 import android.content.SharedPreferences;
 
@@ -217,7 +218,7 @@ public final class OrvidApp extends Application {
 
     private String rawText(int id) {
         try (java.io.InputStream in = getResources().openRawResource(id)) {
-            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            return new String(Streams.readAll(in), java.nio.charset.StandardCharsets.UTF_8);
         } catch (java.io.IOException e) {
             return "{}";
         }
@@ -274,7 +275,7 @@ public final class OrvidApp extends Application {
                         c.setReadTimeout(15000);
                         c.setRequestProperty("User-Agent", Fetch.USER_AGENT);
                         try (java.io.InputStream in = c.getInputStream()) {
-                            in.readAllBytes();
+                            Streams.readAll(in);
                         }
                         c.disconnect();
                     } catch (Exception ignored) {

@@ -143,6 +143,10 @@ final class PlayerControls implements Player.Listener {
             toggleSubtitles();
             scheduleHide();
         });
+        stage.findViewById(R.id.ctl_cast).setOnClickListener(v -> {
+            overlay.removeCallbacks(hide);
+            DeviceDialog.show(activity);
+        });
         download = stage.findViewById(R.id.ctl_download);
         download.setOnClickListener(v -> showDownloads());
 
@@ -812,6 +816,22 @@ final class PlayerControls implements Player.Listener {
         return openSheet != null && openSheet.dialog.isShowing();
     }
 
+    void castSubtitles(List<String> names, int selected, java.util.function.IntConsumer pick) {
+        Sheet sheet = new Sheet();
+        sheet.choice(activity.getString(R.string.off), selected < 0, () -> {
+            pick.accept(-1);
+            sheet.dismiss();
+        });
+        for (int i = 0; i < names.size(); i++) {
+            final int index = i;
+            sheet.choice(names.get(i), i == selected, () -> {
+                pick.accept(index);
+                sheet.dismiss();
+            });
+        }
+        sheet.show();
+    }
+
     private final class Sheet {
         private final Dialog dialog = Panic.guard(activity, new Dialog(activity));
         private final LinearLayout list = new LinearLayout(activity);
@@ -822,7 +842,17 @@ final class PlayerControls implements Player.Listener {
             int pad = Ui.dp(activity, 8);
             list.setPadding(0, pad, 0, pad + Ui.dp(activity, 8));
             dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-            dialog.setContentView(list);
+            android.widget.ScrollView scroll = new android.widget.ScrollView(activity) {
+                @Override
+                protected void onMeasure(int widthSpec, int heightSpec) {
+                    int max = Math.round(activity.getResources().getDisplayMetrics().heightPixels * 0.7f);
+                    super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(max, MeasureSpec.AT_MOST));
+                }
+            };
+            scroll.setFillViewport(true);
+            scroll.setVerticalScrollBarEnabled(false);
+            scroll.addView(list);
+            dialog.setContentView(scroll);
             dialog.setOnDismissListener(d -> scheduleHide());
         }
 

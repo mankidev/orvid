@@ -1,5 +1,6 @@
 package com.orvid.play;
 
+import com.orvid.net.Streams;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
@@ -92,7 +93,7 @@ public final class Translate {
             int code = c.getResponseCode();
             if (code >= 400) throw new IOException("HTTP " + code);
             try (InputStream in = c.getInputStream()) {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                return new String(Streams.readAll(in), StandardCharsets.UTF_8);
             }
         });
     }

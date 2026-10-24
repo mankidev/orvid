@@ -157,4 +157,25 @@
     <string name="up_next">%1$d में अगला: %2$s
 रद्द करने के लिए टैप करें</string>
     <string name="block_screenshots">स्क्रीनशॉट और स्क्रीन रिकॉर्डिंग रोकें</string>
+    <string name="published">प्रकाशित: %1$s</string>
+    <string name="add">जोड़ें</string>
+    <string name="add_by_ip">IP पते से टीवी जोड़ें</string>
+    <string name="cast">कास्ट</string>
+    <string name="cast_to">इस पर कास्ट करें</string>
+    <string name="searching">इस Wi-Fi नेटवर्क पर टीवी खोजे जा रहे हैं</string>
+    <string name="stop_casting">कास्ट रोकें</string>
+    <string name="volume">आवाज़</string>
+    <string name="casting_channel">कास्टिंग</string>
+    <string name="casting_to">%1$s पर कास्ट हो रहा है</string>
+    <string name="connected_to">%1$s से जुड़ा</string>
+    <string name="connecting_to">%1$s से जुड़ रहा है</string>
+    <string name="ended_on">%1$s पर खत्म हुआ</string>
+    <string name="loading_on">%1$s पर लोड हो रहा है</string>
+    <string name="no_devices">अभी कोई टीवी नहीं मिला। देखें कि टीवी चालू है और उसी Wi-Fi पर है।</string>
+    <string name="paused_on">%1$s पर रुका है</string>
+    <string name="playing_on">%1$s पर चल रहा है</string>
+    <string name="pause">रोकें</string>
+    <string name="invalid_ip">192.168.1.20 जैसा IP पता डालें</string>
+    <string name="cast_unsupported">यह वीडियो टीवी पर नहीं भेजा जा सकता</string>
+    <string name="cast_failed">कास्ट शुरू नहीं हो सका: %1$s</string>
 </resources>

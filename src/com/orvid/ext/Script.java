@@ -1,5 +1,6 @@
 package com.orvid.ext;
 
+import com.orvid.net.Streams;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
@@ -285,7 +286,7 @@ final class Script {
             if (in != null) {
                 if ("gzip".equalsIgnoreCase(c.getContentEncoding())) in = new java.util.zip.GZIPInputStream(in);
                 try (InputStream b = in) {
-                    body = new String(b.readNBytes(MAX_BODY), StandardCharsets.UTF_8);
+                    body = new String(Streams.readN(b, MAX_BODY), StandardCharsets.UTF_8);
                 }
             }
             JsonObject out = new JsonObject();
@@ -326,7 +327,7 @@ final class Script {
             InputStream in = c.getInputStream();
             if ("gzip".equalsIgnoreCase(c.getContentEncoding())) in = new java.util.zip.GZIPInputStream(in);
             try (InputStream body2 = in) {
-                byte[] got = body2.readNBytes(MAX_BODY);
+                byte[] got = Streams.readN(body2, MAX_BODY);
                 return new String(got, StandardCharsets.UTF_8);
             }
         });

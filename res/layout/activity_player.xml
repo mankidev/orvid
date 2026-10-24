@@ -65,6 +65,8 @@
 
         <include layout="@layout/view_controls" />
 
+        <include layout="@layout/view_cast" />
+
         <TextView
             android:id="@+id/debug"
             android:layout_width="match_parent"

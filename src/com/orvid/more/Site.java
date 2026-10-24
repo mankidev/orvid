@@ -1,5 +1,6 @@
 package com.orvid.more;
 
+import com.orvid.net.Streams;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
@@ -110,7 +111,7 @@ public abstract class Site {
                 if (c.getResponseCode() != 206 && from > 0) throw new IOException("no range");
                 if (c.getResponseCode() >= 400) throw new IOException("HTTP " + c.getResponseCode());
                 try (InputStream in = c.getInputStream()) {
-                    return in.readNBytes(4096);
+                    return Streams.readN(in, 4096);
                 }
             });
             java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(head);
@@ -247,7 +248,7 @@ public abstract class Site {
                 if (code == 403 || code == 429) throw new IOException("Captcha needed (HTTP " + code + ")");
                 if (code >= 400) throw new IOException("HTTP " + code);
                 try (InputStream in = c.getInputStream()) {
-                    return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                    return new String(Streams.readAll(in), StandardCharsets.UTF_8);
                 }
             });
         } catch (IOException e) {

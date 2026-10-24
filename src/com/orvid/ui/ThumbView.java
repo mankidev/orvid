@@ -2,6 +2,7 @@ package com.orvid.ui;
 
 import android.content.Context;
 import android.graphics.Outline;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewOutlineProvider;
@@ -19,6 +20,14 @@ public final class ThumbView extends ImageView {
             }
         });
         setClipToOutline(true);
+    }
+
+    @Override
+    public void setImageDrawable(Drawable drawable) {
+        boolean tall = drawable != null && drawable.getIntrinsicWidth() > 0
+                && drawable.getIntrinsicHeight() > drawable.getIntrinsicWidth() * 1.2f;
+        setScaleType(tall ? ScaleType.FIT_CENTER : ScaleType.CENTER_CROP);
+        super.setImageDrawable(drawable);
     }
 
     @Override

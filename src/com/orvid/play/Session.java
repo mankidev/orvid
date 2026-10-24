@@ -24,6 +24,8 @@ public final class Session {
     public static com.orvid.yt.Visionos.Video video;
     public static Direct direct;
     public static Frames storyboard;
+    public static android.graphics.Bitmap frame;
+    public static String published;
     public static int sourceIndex;
     public static final List<androidx.media3.exoplayer.source.MediaSource> sources = new ArrayList<>();
     public static final List<StreamInfoItem> related = new ArrayList<>();
@@ -66,7 +68,9 @@ public final class Session {
     private static void clearMedia() {
         video = null;
         direct = null;
+        if (storyboard != null) storyboard.stop();
         storyboard = null;
+        frame = null;
         sourceIndex = 0;
         sources.clear();
     }

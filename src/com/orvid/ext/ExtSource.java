@@ -142,6 +142,7 @@ public final class ExtSource extends Source {
         String avatar = o.getString("avatar", null);
         if (avatar != null && avatar.startsWith("http")) avatars.add(new Image(avatar, 68, 68, Image.ResolutionLevel.LOW));
         item.setUploaderAvatars(avatars);
+        if ("movie".equals(o.getString("kind", null))) com.orvid.search.Movies.mark(url);
         Object date = o.get("date");
         if (date instanceof Number) com.orvid.search.Dates.set(item, ((Number) date).longValue());
         else if (date instanceof String) com.orvid.search.Dates.set(item, (String) date);
@@ -191,6 +192,14 @@ public final class ExtSource extends Source {
             for (int i = 0; i < qualities.size(); i++) {
                 JsonObject q = qualities.getObject(i);
                 if (q != null) d.variant(q.getInt("height", 0), q.getString("url", null));
+            }
+        }
+        JsonArray subs = out.getArray("subtitles");
+        if (subs != null) {
+            for (int i = 0; i < subs.size(); i++) {
+                JsonObject t = subs.getObject(i);
+                String u = t == null ? null : t.getString("url", null);
+                if (u != null) d.subtitles.add(new com.orvid.play.Direct.Subtitle(u, t.getString("lang", null), t.getString("label", null)));
             }
         }
         JsonObject sp = out.getObject("sprite");

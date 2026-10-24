@@ -165,6 +165,17 @@ public final class CircuitDataSource extends BaseDataSource {
         partsFrom = -1;
         parts = null;
         memory = null;
+        if (SubTranslate.handles(dataSpec.uri.toString())) {
+            byte[] vtt = SubTranslate.vtt(circuit, dataSpec.uri.toString(), userAgent, referer, cookie);
+            memory = vtt;
+            memoryEnd = vtt.length;
+            end = vtt.length;
+            chunkEnd = 0;
+            knownTotal = vtt.length;
+            opened = true;
+            transferStarted(dataSpec);
+            return Math.max(0, vtt.length - position);
+        }
         Warm.Entry warm = Warm.get(dataSpec.uri.toString());
         if (warm != null && position < warm.head.length) {
             memory = warm.head;

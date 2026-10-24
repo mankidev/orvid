@@ -72,7 +72,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class PlayerActivity extends Activity implements com.orvid.app.Job.Scoped {
+public final class PlayerActivity extends Activity implements com.orvid.app.Job.Scoped, com.orvid.cast.Cast.Listener, CastPanel.Host {
 
     private final com.orvid.net.Fetch.Scope jobScope = new com.orvid.net.Fetch.Scope();
     private final com.orvid.net.Fetch.Scope relatedScope = new com.orvid.net.Fetch.Scope().background();
@@ -94,6 +94,37 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     public static final String EXTRA_START_MS = "start_ms";
     public static final String EXTRA_TITLE = "title";
     public static final String EXTRA_AVATAR = "avatar";
+    public static final String EXTRA_DATE = "date";
+
+    static String dateOf(StreamInfoItem item) {
+        if (item.getUploadDate() != null) return "@" + item.getUploadDate().getInstant().toEpochMilli();
+        String text = item.getTextualUploadDate();
+        return text == null || text.isEmpty() ? null : text;
+    }
+
+    private void showPublished(String date) {
+        published = date;
+        TextView view = header.findViewById(R.id.published);
+        if (date == null || date.isEmpty()) {
+            view.setText("");
+            view.setVisibility(View.GONE);
+            return;
+        }
+        String shown = date;
+        if (date.startsWith("@")) {
+            try {
+                shown = java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG, java.util.Locale.getDefault())
+                        .format(new java.util.Date(Long.parseLong(date.substring(1))));
+            } catch (NumberFormatException e) {
+                shown = "";
+            }
+        }
+        view.setText(shown.isEmpty() ? "" : getString(R.string.published, shown));
+        view.setVisibility(!shown.isEmpty() && description.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE);
+    }
+
+    private String published;
+    private String nextDate;
     private static final Pattern LINK = Pattern.compile("https?://\\S+");
 
     private TextureView surface;
@@ -178,6 +209,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             }
         });
         description = header.findViewById(R.id.description);
+        showPublished(getIntent().getStringExtra(EXTRA_DATE));
         expand = header.findViewById(R.id.expand);
         header.findViewById(R.id.title_block).setOnClickListener(v -> toggleDescription());
         related = new VideoAdapter(this, VideoAdapter.COMPACT, this::openRelated);
@@ -190,7 +222,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
 
             @Override
             public void onScroll(android.widget.AbsListView view, int first, int visible, int total) {
-                if (related.getCount() > 0 && first + visible >= total - 2) {
+                if (related.getCount() > 0 && first + visible >= total - 12) {
                     if (!hiddenRelated.isEmpty()) {
                         relatedShown += RELATED_STEP;
                         reveal(java.util.Collections.<StreamInfoItem>emptyList());
@@ -364,6 +396,9 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             if (r - l != or - ol || b - t != ob - ot) stage.post(this::fitSurface);
         });
         controls = new PlayerControls(this, player, stage, this::minimize, side);
+        castPanel = new CastPanel(this, stage, this);
+        cast = com.orvid.cast.Cast.get(this);
+        cast.addListener(this);
         sourceAccent = Ui.accent(Ui.iconForUrl(this, pageUrl));
         if (sourceAccent != 0) controls.setAccent(sourceAccent);
         controls.setSkip(this::openPrevious, this::openNext);
@@ -539,6 +574,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         channelUrl = Session.channel;
         ((TextView) header.findViewById(R.id.sub)).setText(Session.sub);
         description.setText(Session.description);
+        showPublished(Session.published);
         controls.setTitle(Session.title);
         circuit = Session.circuit;
         ytVideo = Session.video;
@@ -588,6 +624,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         Session.channel = channelUrl;
         Session.sub = ((TextView) header.findViewById(R.id.sub)).getText().toString();
         Session.description = description.getText();
+        Session.published = published;
         Session.circuit = circuit;
         Session.relatedToken = relatedToken;
         Session.video = ytVideo;
@@ -602,6 +639,12 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         if (minimizing) return;
         minimizing = true;
         saveToSession();
+        Session.frame = null;
+        if (surface.isAvailable() && surface.getWidth() > 0 && surface.getHeight() > 0) {
+            int w = Math.min(surface.getWidth(), Ui.dp(this, 200));
+            int h = Math.max(1, Math.round(w * surface.getHeight() / (float) surface.getWidth()));
+            Session.frame = surface.getBitmap(w, h);
+        }
         sheet.animate().translationY(sheet.getHeight()).setDuration(200)
                 .withEndAction(() -> {
                     finish();
@@ -623,6 +666,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     private com.orvid.play.Frames board;
 
     private void showFrames(com.orvid.play.Frames sb) {
+        if (board != null && board != sb) board.stop();
         board = sb;
         controls.setStoryboard(sb);
         LinearLayout row = header.findViewById(R.id.frames_row);
@@ -673,6 +717,8 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     private void toggleDescription() {
         boolean open = description.getVisibility() != View.VISIBLE;
         description.setVisibility(open ? View.VISIBLE : View.GONE);
+        TextView date = header.findViewById(R.id.published);
+        date.setVisibility(open && date.length() > 0 ? View.VISIBLE : View.GONE);
         View frames = header.findViewById(R.id.frames);
         LinearLayout row = header.findViewById(R.id.frames_row);
         frames.setVisibility(open && row.getChildCount() > 0 ? View.VISIBLE : View.GONE);
@@ -696,6 +742,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             while (BACK.size() > BACK_LIMIT) BACK.removeLast();
         }
         nextAvatar = Ui.thumbnail(item.getUploaderAvatars(), Ui.dp(this, 32));
+        nextDate = dateOf(item);
         switchTo(item.getUrl(), item.getServiceId(), Ui.thumbnail(item.getThumbnails(), 640), item.getName());
     }
 
@@ -801,10 +848,12 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     }
 
     private void switchTo(String url, int service, String thumb, String title) {
+        if (Ui.doubleTap()) return;
         rememberShown();
         startActivity(new Intent(this, PlayerActivity.class)
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_AVATAR, nextAvatar)
+                .putExtra(EXTRA_DATE, nextDate)
                 .putExtra(EXTRA_URL, url)
                 .putExtra(EXTRA_SERVICE, service)
                 .putExtra(EXTRA_THUMB, thumb)
@@ -1479,30 +1528,36 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         if (token == null && seed == null) return;
         relatedLoading = true;
         final String c0 = circuit != null ? circuit : Visionos.takeCircuit();
+        final String own = ((TextView) header.findViewById(R.id.name)).getText().toString();
+        final String ownChannel = ((TextView) header.findViewById(R.id.uploader)).getText().toString();
+        final List<StreamInfoItem> shownNow = new ArrayList<>(related.items());
+        final com.orvid.search.Filters allowed = relatedFilters();
+        final String self = pageUrl;
+        final int[] foreign = new int[1];
+        final List<StreamInfoItem> kept = new ArrayList<>();
         new Job<com.orvid.yt.Search.Page>(this) {
             @Override
             protected com.orvid.yt.Search.Page load() throws Exception {
-                return Fetch.retrying(c0, c -> token != null
+                com.orvid.yt.Search.Page page = Fetch.retrying(c0, c -> token != null
                         ? com.orvid.yt.Related.more(c, token) : com.orvid.yt.Related.page(c, seed));
+                for (StreamInfoItem i : page.items) {
+                    if (i.getUrl().equals(self) || !sourceOn(allowed, i)) continue;
+                    if (!com.orvid.search.Ranker.sameScript(own, i.getName())
+                            || !com.orvid.search.Ranker.nearTopic(own, ownChannel, i, shownNow)) {
+                        foreign[0]++;
+                        continue;
+                    }
+                    kept.add(i);
+                }
+                return page;
             }
 
             @Override
             protected void show(com.orvid.yt.Search.Page p) {
                 relatedToken = p.continuation;
-                String own = ((TextView) header.findViewById(R.id.name)).getText().toString();
-                String ownChannel = ((TextView) header.findViewById(R.id.uploader)).getText().toString();
                 List<StreamInfoItem> fresh = new ArrayList<>();
-                int foreign = 0;
-                for (StreamInfoItem i : p.items) {
-                    if (i.getUrl().equals(pageUrl) || !sourceOn(relatedFilters(), i)) continue;
-                    if (!com.orvid.search.Ranker.sameScript(own, i.getName())
-                            || !com.orvid.search.Ranker.nearTopic(own, ownChannel, i, related.items())) {
-                        foreign++;
-                        continue;
-                    }
-                    if (relatedSeen.add(i.getUrl())) fresh.add(i);
-                }
-                if (foreign > 0) Diag.mark("related more: " + foreign + " off topic dropped");
+                for (StreamInfoItem i : kept) if (relatedSeen.add(i.getUrl())) fresh.add(i);
+                if (foreign[0] > 0) Diag.mark("related more: " + foreign[0] + " off topic dropped");
                 reveal(fresh);
                 Session.related.addAll(fresh);
                 Session.relatedToken = relatedToken;
@@ -1681,6 +1736,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     private void playDirect(com.orvid.play.Direct d, String on) {
         circuit = on;
         directMedia = d;
+        Subtitles.addTranslation(this, d);
         TextView name = header.findViewById(R.id.name);
         if (!d.title.isEmpty() || name.getText().length() == 0) {
             name.setText(d.title);
@@ -1691,10 +1747,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         CircuitDataSource.Factory data = new CircuitDataSource.Factory(circuit, Fetch.USER_AGENT, d.referer).cookie(d.cookie)
                 .timeout(slowSource ? SLOW_MEDIA_TIMEOUT_MS : 0);
         sources.clear();
-        MediaItem item = MediaItem.fromUri(d.url);
-        sources.add(d.hls ? new HlsMediaSource.Factory(data).createMediaSource(item)
-                : d.dash ? new DashMediaSource.Factory(data).createMediaSource(item)
-                : new ProgressiveMediaSource.Factory(data).createMediaSource(item));
+        sources.add(directSource(data, d.url, d.hls, d.dash));
         if (d.fallback != null) {
             MediaItem backup = MediaItem.fromUri(d.fallback);
             sources.add(d.fallbackHls ? new HlsMediaSource.Factory(data).createMediaSource(backup)
@@ -1707,6 +1760,28 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     }
 
     private String fileUrl;
+
+    private MediaSource directSource(CircuitDataSource.Factory data, String url, boolean hls, boolean dash) {
+        if (directMedia == null || directMedia.subtitles.isEmpty()) {
+            MediaItem item = MediaItem.fromUri(url);
+            return hls ? new HlsMediaSource.Factory(data).createMediaSource(item)
+                    : dash ? new DashMediaSource.Factory(data).createMediaSource(item)
+                    : new ProgressiveMediaSource.Factory(data).createMediaSource(item);
+        }
+        List<MediaItem.SubtitleConfiguration> subs = new ArrayList<>();
+        for (com.orvid.play.Direct.Subtitle t : directMedia.subtitles) {
+            subs.add(new MediaItem.SubtitleConfiguration.Builder(Uri.parse(t.url))
+                    .setMimeType(!com.orvid.play.SubTranslate.handles(t.url) && t.url.toLowerCase(java.util.Locale.ROOT).contains(".srt")
+                            ? androidx.media3.common.MimeTypes.APPLICATION_SUBRIP : androidx.media3.common.MimeTypes.TEXT_VTT)
+                    .setLanguage(t.language).setLabel(t.label).build());
+        }
+        MediaItem item = new MediaItem.Builder().setUri(url)
+                .setMimeType(hls ? androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                        : dash ? androidx.media3.common.MimeTypes.APPLICATION_MPD : null)
+                .setSubtitleConfigurations(subs).build();
+        Diag.mark("direct " + subs.size() + " subtitles");
+        return new androidx.media3.exoplayer.source.DefaultMediaSourceFactory(data).createMediaSource(item);
+    }
 
     List<com.orvid.play.Direct.Variant> fileQualities() {
         return directMedia == null || directMedia.variants.size() < 2
@@ -1745,9 +1820,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         fileUrl = v.url;
         CircuitDataSource.Factory data = new CircuitDataSource.Factory(circuit, Fetch.USER_AGENT, directMedia.referer)
                 .cookie(directMedia.cookie).timeout(slowSource ? SLOW_MEDIA_TIMEOUT_MS : 0);
-        MediaItem item = MediaItem.fromUri(v.url);
-        MediaSource source = v.hls ? new HlsMediaSource.Factory(data).createMediaSource(item)
-                : new ProgressiveMediaSource.Factory(data).createMediaSource(item);
+        MediaSource source = directSource(data, v.url, v.hls, false);
         long at = Math.max(0, player.getCurrentPosition());
         sources.clear();
         sources.add(source);
@@ -2070,7 +2143,133 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         buffering.setVisibility(View.VISIBLE);
         player.setMediaSource(sources.get(sourceIndex), positionMs);
         player.prepare();
-        player.setPlayWhenReady(true);
+        player.setPlayWhenReady(!onTv);
+        if (cast.active() && !onTv) stage.post(() -> {
+            if (!onTv) castHere(positionMs);
+        });
+    }
+
+    private com.orvid.cast.Cast cast;
+    private CastPanel castPanel;
+    private boolean onTv;
+    private com.orvid.cast.CastItem castItem;
+    private boolean castRefused;
+
+    private com.orvid.cast.CastItem castable() {
+        com.orvid.cast.CastItem item = null;
+        if (directMedia != null && !directMedia.dash) {
+            String url = fileQuality() != null ? fileQuality() : directMedia.url;
+            item = new com.orvid.cast.CastItem(url, url.equals(directMedia.url) ? directMedia.hls : url.contains(".m3u8"), circuit);
+            if (directMedia.referer != null) item.headers.put("Referer", directMedia.referer);
+            if (directMedia.cookie != null) item.headers.put("Cookie", directMedia.cookie);
+            for (com.orvid.play.Direct.Subtitle t : directMedia.subtitles) {
+                item.subtitles.add(new com.orvid.cast.CastItem.Track(t.url, t.language, t.label));
+            }
+        } else if (ytVideo != null && ytVideo.hls != null) {
+            item = new com.orvid.cast.CastItem(ytVideo.hls, true, circuit);
+            item.headers.put("User-Agent", Visionos.USER_AGENT);
+            item.live = ytVideo.live;
+            item.durationMs = ytVideo.lengthSeconds * 1000;
+            for (Visionos.Caption c : Subtitles.withTranslation(this, ytVideo.captions)) {
+                item.subtitles.add(new com.orvid.cast.CastItem.Track(c.url, c.language, c.name));
+            }
+        }
+        if (item == null) return null;
+        item.page = pageUrl;
+        item.title = ((TextView) header.findViewById(R.id.name)).getText().toString();
+        item.author = ((TextView) header.findViewById(R.id.uploader)).getText().toString();
+        item.thumbnail = coverUrl;
+        if (item.durationMs <= 0 && player.getDuration() > 0) item.durationMs = player.getDuration();
+        return item;
+    }
+
+    private void castHere(long positionMs) {
+        com.orvid.cast.CastItem item = castable();
+        if (item == null) {
+            if (streamStarted && !castRefused) {
+                castRefused = true;
+                android.widget.Toast.makeText(this, R.string.cast_unsupported, android.widget.Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
+        castItem = item;
+        onTv = true;
+        player.pause();
+        castPanel.show(item.thumbnail, !item.subtitles.isEmpty());
+        cast.cast(item, preferredTrack(item), positionMs);
+    }
+
+    private static int preferredTrack(com.orvid.cast.CastItem item) {
+        String mine = java.util.Locale.getDefault().getLanguage();
+        for (int i = 0; i < item.subtitles.size(); i++) {
+            String l = item.subtitles.get(i).language;
+            if (l.equals(mine) || l.startsWith(mine + "-")) return i;
+        }
+        return -1;
+    }
+
+    @Override
+    public void onCastUpdate() {
+        String error = cast.takeError();
+        if (error != null) android.widget.Toast.makeText(this, error, android.widget.Toast.LENGTH_LONG).show();
+        if (cast.active() && cast.media() != castItem) {
+            if (cast.media() != null && pageUrl.equals(cast.media().page)) {
+                castItem = cast.media();
+            } else {
+                if (streamStarted && !castRefused) castHere(Math.max(0, player.getCurrentPosition()));
+                return;
+            }
+        }
+        if (!cast.active() && onTv) {
+            onTv = false;
+            long at = castPanel.lastPosition();
+            castPanel.hide();
+            castItem = null;
+            if (at > 0) player.seekTo(at);
+            player.play();
+            return;
+        }
+        if (cast.active() && !onTv && castItem != null && pageUrl.equals(castItem.page)) {
+            onTv = true;
+            player.pause();
+            castPanel.show(castItem.thumbnail, !castItem.subtitles.isEmpty());
+        }
+        if (castPanel.showing()) castPanel.update();
+    }
+
+    @Override
+    public void subtitleMenu() {
+        com.orvid.cast.CastSession s = cast.session();
+        if (s == null || castItem == null) return;
+        List<String> names = new ArrayList<>();
+        for (com.orvid.cast.CastItem.Track t : castItem.subtitles) names.add(t.name);
+        long[] active = s.activeTracks();
+        int selected = active.length > 0 ? (int) active[0] - 1 : -1;
+        controls.castSubtitles(names, selected, i -> s.setTracks(i < 0 ? new long[0] : new long[]{i + 1}));
+    }
+
+    @Override
+    public void castMenu() {
+        DeviceDialog.show(this);
+    }
+
+    @Override
+    public void replayOnTv() {
+        castHere(0);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        com.orvid.cast.CastSession s = cast == null ? null : cast.session();
+        int code = event.getKeyCode();
+        if (onTv && s != null && cast.connected()
+                && (code == android.view.KeyEvent.KEYCODE_VOLUME_UP || code == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN) {
+                s.setVolume(s.volume() + (code == android.view.KeyEvent.KEYCODE_VOLUME_UP ? 0.05 : -0.05));
+            }
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void nextSource() {
@@ -2272,7 +2471,10 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         stage.removeCallbacks(sampler);
         stage.removeCallbacks(stallWatch);
         controls.release();
+        cast.removeListener(this);
+        castPanel.hide();
         saveToSession();
+        if (board != null && !Session.has(pageUrl)) board.stop();
         player.clearVideoTextureView(surface);
         player.removeListener(playerListener);
         player.removeAnalyticsListener(analytics);

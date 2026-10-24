@@ -159,4 +159,25 @@
     <string name="up_next">%1$d sn sonra: %2$s
 İptal için dokunun</string>
     <string name="block_screenshots">Ekran görüntüsünü ve kaydını engelle</string>
+    <string name="published">Yayınlanma: %1$s</string>
+    <string name="add">Ekle</string>
+    <string name="add_by_ip">IP adresiyle TV ekle</string>
+    <string name="cast">Yayınla</string>
+    <string name="cast_to">Şuraya yayınla</string>
+    <string name="searching">Bu Wi-Fi ağındaki TV\'ler aranıyor</string>
+    <string name="stop_casting">Yayını durdur</string>
+    <string name="volume">Ses</string>
+    <string name="casting_channel">Yayın</string>
+    <string name="casting_to">%1$s cihazına yayınlanıyor</string>
+    <string name="connected_to">%1$s cihazına bağlandı</string>
+    <string name="connecting_to">%1$s cihazına bağlanıyor</string>
+    <string name="ended_on">%1$s cihazında bitti</string>
+    <string name="loading_on">%1$s cihazında yükleniyor</string>
+    <string name="no_devices">Henüz TV bulunamadı. TV\'nin açık ve aynı Wi-Fi\'de olduğundan emin ol.</string>
+    <string name="paused_on">%1$s cihazında duraklatıldı</string>
+    <string name="playing_on">%1$s cihazında oynatılıyor</string>
+    <string name="pause">Duraklat</string>
+    <string name="invalid_ip">192.168.1.20 gibi bir IP adresi gir</string>
+    <string name="cast_unsupported">Bu video TV\'ye gönderilemiyor</string>
+    <string name="cast_failed">Yayın başlatılamadı: %1$s</string>
 </resources>

@@ -157,4 +157,25 @@
     <string name="up_next">Als Nächstes in %1$d: %2$s
 Zum Abbrechen tippen</string>
     <string name="block_screenshots">Screenshots und Bildschirmaufnahmen sperren</string>
+    <string name="published">Veröffentlicht: %1$s</string>
+    <string name="add">Hinzufügen</string>
+    <string name="add_by_ip">Fernseher per IP-Adresse hinzufügen</string>
+    <string name="cast">Streamen</string>
+    <string name="cast_to">Streamen auf</string>
+    <string name="searching">Suche nach Fernsehern in diesem WLAN</string>
+    <string name="stop_casting">Streaming beenden</string>
+    <string name="volume">Lautstärke</string>
+    <string name="casting_channel">Streaming</string>
+    <string name="casting_to">Wird auf %1$s gestreamt</string>
+    <string name="connected_to">Mit %1$s verbunden</string>
+    <string name="connecting_to">Verbindung mit %1$s</string>
+    <string name="ended_on">Auf %1$s beendet</string>
+    <string name="loading_on">Wird auf %1$s geladen</string>
+    <string name="no_devices">Noch kein Fernseher gefunden. Prüfe, ob der Fernseher an und im selben WLAN ist.</string>
+    <string name="paused_on">Auf %1$s pausiert</string>
+    <string name="playing_on">Wird auf %1$s abgespielt</string>
+    <string name="pause">Pause</string>
+    <string name="invalid_ip">Gib eine IP-Adresse wie 192.168.1.20 ein</string>
+    <string name="cast_unsupported">Dieses Video kann nicht an einen Fernseher gesendet werden</string>
+    <string name="cast_failed">Streaming konnte nicht gestartet werden: %1$s</string>
 </resources>

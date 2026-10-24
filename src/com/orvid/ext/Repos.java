@@ -1,5 +1,6 @@
 package com.orvid.ext;
 
+import com.orvid.net.Streams;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
@@ -42,6 +43,7 @@ public final class Repos {
 
     public static final String OFFICIAL = "https://raw.githubusercontent.com/mankidev/orvid-sources/main/";
     public static final String SECRET = "https://raw.githubusercontent.com/mankidev/orvid-sources-secret/main/";
+    public static final String FILMS = "https://raw.githubusercontent.com/mankidev/orvid-films/main/";
 
     public static boolean installed(File root, String url) {
         String wanted = canonical(normalize(url));
@@ -250,7 +252,7 @@ public final class Repos {
             int code = c.getResponseCode();
             if (code >= 400) throw new IOException("HTTP " + code + " for " + url.substring(url.lastIndexOf('/') + 1));
             try (InputStream in = c.getInputStream()) {
-                byte[] body = in.readNBytes(MAX_FILE + 1);
+                byte[] body = Streams.readN(in, MAX_FILE + 1);
                 if (body.length > MAX_FILE) throw new IOException("file too large");
                 return body;
             }

@@ -1,5 +1,6 @@
 package com.orvid.image;
 
+import com.orvid.net.Streams;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
@@ -119,8 +120,26 @@ public final class Images {
 
     private void load(final ImageView view, final String url, final int targetWidth, final String page, final int priority) {
         if (url == null || url.isEmpty()) {
-            view.setTag(R.id.image_key, null);
+            String found = page == null ? null : pageImages.get(page);
+            if (found != null && !found.isEmpty()) {
+                load(view, found, targetWidth, page, priority);
+                return;
+            }
             view.setImageDrawable(null);
+            if (found != null || page == null || !page.startsWith("https://") || priority == AVATAR) {
+                view.setTag(R.id.image_key, null);
+                return;
+            }
+            final String pending = "page:" + page;
+            view.setTag(R.id.image_key, pending);
+            pool.execute(new Job(priority, () -> {
+                if (!pending.equals(view.getTag(R.id.image_key))) return;
+                String image = pageImage(page);
+                pageImages.put(page, image == null ? "" : image);
+                if (image != null) main.post(() -> {
+                    if (pending.equals(view.getTag(R.id.image_key))) load(view, image, targetWidth, page, priority);
+                });
+            }));
             return;
         }
         final String key = url + "@" + targetWidth;
@@ -166,6 +185,51 @@ public final class Images {
                 if (visible) visibleLoads.decrementAndGet();
             }
         }));
+    }
+
+    private final java.util.Map<String, String> pageImages = java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<String, String>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(java.util.Map.Entry<String, String> eldest) {
+                    return size() > 500;
+                }
+            });
+    private static final java.util.regex.Pattern OG_IMAGE = java.util.regex.Pattern.compile(
+            "<meta[^>]+(?:property|name)=[\"']og:image(?::url)?[\"'][^>]*content=[\"']([^\"']+)|<meta[^>]+content=[\"']([^\"']+)[\"'][^>]*(?:property|name)=[\"']og:image[\"']",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final int PAGE_HEAD_MAX = 512 * 1024;
+
+    private String pageImage(String page) {
+        String url = page.replaceAll("#.*$", "");
+        try {
+            return Fetch.on(circuitFor(url), () -> {
+                java.net.HttpURLConnection c = Fetch.open(url);
+                c.setRequestProperty("User-Agent", Fetch.USER_AGENT);
+                c.setRequestProperty("Accept", "text/html");
+                c.setRequestProperty("Accept-Encoding", "identity");
+                if (c.getResponseCode() >= 400) return null;
+                StringBuilder head = new StringBuilder();
+                java.io.InputStream body = c.getInputStream();
+                if ("gzip".equalsIgnoreCase(c.getContentEncoding())) body = new java.util.zip.GZIPInputStream(body);
+                try (java.io.Reader in = new java.io.InputStreamReader(body, java.nio.charset.StandardCharsets.UTF_8)) {
+                    char[] buf = new char[8192];
+                    for (int n = in.read(buf); n > 0 && head.length() < PAGE_HEAD_MAX; n = in.read(buf)) {
+                        head.append(buf, 0, n);
+                        java.util.regex.Matcher m = OG_IMAGE.matcher(head);
+                        if (m.find()) {
+                            String found = (m.group(1) != null ? m.group(1) : m.group(2)).replace("&amp;", "&");
+                            if (found.startsWith("//")) found = "https:" + found;
+                            return found.startsWith("http") && !found.toLowerCase(java.util.Locale.ROOT).contains("logo") ? found : null;
+                        }
+                        int end = head.indexOf("</head>");
+                        if (end >= 0) return null;
+                    }
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void showPreview(String key, String preview, int targetWidth) {
@@ -337,7 +401,7 @@ public final class Images {
         if (code == 404 || code == 410) throw new Gone(code);
         if (code >= 400) throw new IOException("HTTP " + code);
         try (java.io.InputStream in = c.getInputStream()) {
-            return in.readAllBytes();
+            return Streams.readAll(in);
         }
     }
 

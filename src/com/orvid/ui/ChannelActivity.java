@@ -371,10 +371,12 @@ public final class ChannelActivity extends Activity implements Job.Scoped {
     }
 
     private void play(StreamInfoItem item) {
+        if (Ui.doubleTap()) return;
         PlayerActivity.clearBack();
         startActivity(new Intent(this, PlayerActivity.class)
                 .putExtra(PlayerActivity.EXTRA_TITLE, item.getName())
                 .putExtra(PlayerActivity.EXTRA_AVATAR, avatarUrl)
+                .putExtra(PlayerActivity.EXTRA_DATE, PlayerActivity.dateOf(item))
                 .putExtra(PlayerActivity.EXTRA_URL, item.getUrl())
                 .putExtra(PlayerActivity.EXTRA_SERVICE, item.getServiceId())
                 .putExtra(PlayerActivity.EXTRA_THUMB, Ui.thumbnail(item.getThumbnails(), 640)));

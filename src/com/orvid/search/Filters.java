@@ -55,10 +55,18 @@ public final class Filters {
     private static final java.util.Set<String> TRANS_SOURCES = new java.util.HashSet<>(java.util.Arrays.asList("ashemaletube"));
     public int orientation;
 
+    private static boolean gaySource(Source s) {
+        return GAY_SOURCES.contains(s.key) || "gay".equals(s.orientation);
+    }
+
+    private static boolean transSource(Source s) {
+        return TRANS_SOURCES.contains(s.key) || "trans".equals(s.orientation);
+    }
+
     public boolean sourceFits(Source s) {
         if (!s.adult || orientation == ORIENT_ANY) return true;
-        boolean gay = GAY_SOURCES.contains(s.key);
-        boolean trans = TRANS_SOURCES.contains(s.key);
+        boolean gay = gaySource(s);
+        boolean trans = transSource(s);
         if (orientation == ORIENT_STRAIGHT) return !gay && !trans;
         if (orientation == ORIENT_GAY) return !trans;
         return !gay;
@@ -77,8 +85,8 @@ public final class Filters {
         Source src = Source.BY_SERVICE.get(item.getServiceId());
         if (src == null || !src.adult) return true;
         String title = Query.fold(item.getName() == null ? "" : item.getName()).replace('-', ' ');
-        boolean gay = GAY_SOURCES.contains(src.key) || GAY_WORDS.matcher(title).find();
-        boolean trans = TRANS_SOURCES.contains(src.key) || TRANS_WORDS.matcher(title).find();
+        boolean gay = gaySource(src) || GAY_WORDS.matcher(title).find();
+        boolean trans = transSource(src) || TRANS_WORDS.matcher(title).find();
         if (orientation == ORIENT_STRAIGHT) return !gay && !trans;
         if (orientation == ORIENT_GAY) return gay && !trans;
         return trans;
@@ -273,7 +281,7 @@ public final class Filters {
             for (StreamInfoItem i : list) if (accepts(i)) k.add(i);
             kept.add(k);
         }
-        List<StreamInfoItem> ranked = Ranker.rank(q, kept, weights, tagged);
+        List<StreamInfoItem> ranked = Movies.first(q, Ranker.rank(q, kept, weights, tagged));
         if (sort == SORT_RELEVANCE) return ranked;
         int strict = Ranker.Ranked.strict(ranked);
         List<StreamInfoItem> head = onTopic(q, new ArrayList<>(ranked.subList(0, strict)));

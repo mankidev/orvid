@@ -6,4 +6,7 @@ public interface Frames {
     float aspect();
 
     void frameAt(long ms, Storyboard.Callback callback);
+
+    default void stop() {
+    }
 }

@@ -1,5 +1,6 @@
 package com.orvid.play;
 
+import com.orvid.net.Streams;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
@@ -108,7 +109,7 @@ public final class Storyboard implements Frames {
                 if (spec.referer != null) h.setRequestProperty("Referer", spec.referer);
                 int c = h.getResponseCode();
                 try (java.io.InputStream in = c < 400 ? h.getInputStream() : h.getErrorStream()) {
-                    if (in != null) in.readAllBytes();
+                    if (in != null) Streams.readAll(in);
                 }
                 return c;
             });

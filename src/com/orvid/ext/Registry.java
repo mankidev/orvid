@@ -138,6 +138,11 @@ public final class Registry {
         }
         String lang = d.getString("lang", null);
         if (lang != null) s.script(lang);
+        JsonArray topics = d.getArray("topics");
+        List<String> topicList = new ArrayList<>();
+        for (int i = 0; i < topics.size(); i++) topicList.add(topics.getString(i, ""));
+        s.topics(topicList);
+        s.orientation = d.getString("orientation", null);
         s.minQuery = Math.max(0, Math.min(10, d.getInt("minQuery", 0)));
         s.browse = d.getBoolean("browse", false);
         return s;

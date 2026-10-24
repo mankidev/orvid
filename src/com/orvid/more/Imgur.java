@@ -1,5 +1,6 @@
 package com.orvid.more;
 
+import com.orvid.net.Streams;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.orvid.play.Direct;
@@ -77,7 +78,7 @@ final class Imgur extends Site {
                 if (code == 403 || code == 429) throw new IOException("Captcha needed (HTTP " + code + ")");
                 if (code >= 400) throw new IOException("HTTP " + code);
                 try (InputStream in = c.getInputStream()) {
-                    return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                    return new String(Streams.readAll(in), StandardCharsets.UTF_8);
                 }
             });
             return com.grack.nanojson.JsonParser.object().from(body);

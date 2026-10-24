@@ -161,4 +161,25 @@
     <string name="up_next">Up next in %1$d: %2$s
 Tap to cancel</string>
     <string name="block_screenshots">Block screenshots and screen recording</string>
+    <string name="published">Published %1$s</string>
+    <string name="add">Add</string>
+    <string name="add_by_ip">Add a TV by IP address</string>
+    <string name="cast">Cast</string>
+    <string name="cast_to">Cast to</string>
+    <string name="searching">Looking for TVs on this Wi-Fi network</string>
+    <string name="stop_casting">Stop casting</string>
+    <string name="volume">Volume</string>
+    <string name="casting_channel">Casting</string>
+    <string name="casting_to">Casting to %1$s</string>
+    <string name="connected_to">Connected to %1$s</string>
+    <string name="connecting_to">Connecting to %1$s</string>
+    <string name="ended_on">Finished on %1$s</string>
+    <string name="loading_on">Loading on %1$s</string>
+    <string name="no_devices">No TV found yet. Make sure the TV is on and on the same Wi-Fi.</string>
+    <string name="paused_on">Paused on %1$s</string>
+    <string name="playing_on">Playing on %1$s</string>
+    <string name="pause">Pause</string>
+    <string name="invalid_ip">Enter an IP address like 192.168.1.20</string>
+    <string name="cast_unsupported">This video can\'t be sent to a TV</string>
+    <string name="cast_failed">Could not start casting: %1$s</string>
 </resources>

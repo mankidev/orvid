@@ -50,6 +50,8 @@ public final class WebPlayerActivity extends Activity {
             finish();
             return;
         }
+        androidx.media3.exoplayer.ExoPlayer behind = com.orvid.play.Session.player();
+        if (behind != null) behind.pause();
         TorBrowser.openSession(this, "webplayer", background, new TorBrowser.Ready() {
             @Override
             public void ready(WebView v) {

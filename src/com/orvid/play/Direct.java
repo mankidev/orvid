@@ -13,6 +13,19 @@ public final class Direct {
     public boolean fallbackHls;
     public Storyboard.Spec sprite;
     public final java.util.List<Variant> variants = new java.util.ArrayList<>();
+    public final java.util.List<Subtitle> subtitles = new java.util.ArrayList<>();
+
+    public static final class Subtitle {
+        public final String url;
+        public final String language;
+        public final String label;
+
+        public Subtitle(String url, String language, String label) {
+            this.url = url;
+            this.language = language;
+            this.label = label;
+        }
+    }
 
     public static final class Variant {
         public final int height;

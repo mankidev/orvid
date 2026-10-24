@@ -157,4 +157,25 @@
     <string name="up_next">التالي خلال %1$d: %2$s
 انقر للإلغاء</string>
     <string name="block_screenshots">منع لقطات الشاشة وتسجيلها</string>
+    <string name="published">تاريخ النشر: %1$s</string>
+    <string name="add">إضافة</string>
+    <string name="add_by_ip">إضافة تلفاز عبر عنوان IP</string>
+    <string name="cast">بث</string>
+    <string name="cast_to">البث إلى</string>
+    <string name="searching">جارٍ البحث عن أجهزة تلفاز في شبكة Wi-Fi هذه</string>
+    <string name="stop_casting">إيقاف البث</string>
+    <string name="volume">مستوى الصوت</string>
+    <string name="casting_channel">البث</string>
+    <string name="casting_to">جارٍ البث إلى %1$s</string>
+    <string name="connected_to">متصل بـ %1$s</string>
+    <string name="connecting_to">جارٍ الاتصال بـ %1$s</string>
+    <string name="ended_on">انتهى على %1$s</string>
+    <string name="loading_on">جارٍ التحميل على %1$s</string>
+    <string name="no_devices">لم يتم العثور على تلفاز بعد. تأكد أن التلفاز يعمل ومتصل بنفس شبكة Wi-Fi.</string>
+    <string name="paused_on">متوقف مؤقتًا على %1$s</string>
+    <string name="playing_on">جارٍ التشغيل على %1$s</string>
+    <string name="pause">إيقاف مؤقت</string>
+    <string name="invalid_ip">أدخل عنوان IP مثل 192.168.1.20</string>
+    <string name="cast_unsupported">لا يمكن إرسال هذا الفيديو إلى التلفاز</string>
+    <string name="cast_failed">تعذّر بدء البث: %1$s</string>
 </resources>

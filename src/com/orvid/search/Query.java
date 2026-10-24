@@ -18,7 +18,7 @@ public final class Query {
 
     private static final Pattern PHRASE = Pattern.compile("\"([^\"]+)\"");
     private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]+");
-    private static final Set<String> STOP = new HashSet<>(Arrays.asList(
+    static final Set<String> STOP = new HashSet<>(Arrays.asList(
             "ve", "ile", "bir", "bu", "de", "da", "mi", "mu", "icin", "nasil",
             "the", "a", "an", "of", "and", "to", "in", "for", "on", "with", "how"));
     private static final int STEM = 4;
@@ -31,6 +31,7 @@ public final class Query {
     public final List<String> required = new ArrayList<>();
     public final List<String> inTitle = new ArrayList<>();
     public String plainQuery;
+    public boolean movie;
     public boolean anyOf;
     public int beforeYear;
     public int afterYear;
@@ -57,6 +58,20 @@ public final class Query {
 
     public String script() {
         return script(platformQuery);
+    }
+
+    public static double foreignShare(String text, String script) {
+        int letters = 0, foreign = 0;
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if (!Character.isLetter(cp)) continue;
+            letters++;
+            Character.UnicodeScript sc = Character.UnicodeScript.of(cp);
+            if (sc == Character.UnicodeScript.LATIN || sc == Character.UnicodeScript.COMMON) continue;
+            if (!script(new String(Character.toChars(cp))).equals(script)) foreign++;
+        }
+        return letters == 0 ? 0 : foreign / (double) letters;
     }
 
     public static String script(String text) {
@@ -151,6 +166,10 @@ public final class Query {
         for (String p : phrases) q.phrases.add(fold(p));
         for (String w : words(fold(platform))) {
             if (anyOf && w.equals("or")) continue;
+            if (Movies.WORDS.contains(w)) {
+                q.movie = true;
+                continue;
+            }
             if (!STOP.contains(w) && !q.excluded.contains(w) && !q.terms.contains(w)) q.terms.add(w);
         }
         return q;

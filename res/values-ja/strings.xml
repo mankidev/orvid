@@ -157,4 +157,25 @@
     <string name="up_next">%1$d 秒後に次へ: %2$s
 タップでキャンセル</string>
     <string name="block_screenshots">スクリーンショットと画面録画をブロック</string>
+    <string name="published">公開日: %1$s</string>
+    <string name="add">追加</string>
+    <string name="add_by_ip">IP アドレスでテレビを追加</string>
+    <string name="cast">キャスト</string>
+    <string name="cast_to">キャスト先</string>
+    <string name="searching">この Wi-Fi のテレビを探しています</string>
+    <string name="stop_casting">キャストを停止</string>
+    <string name="volume">音量</string>
+    <string name="casting_channel">キャスト</string>
+    <string name="casting_to">%1$s にキャスト中</string>
+    <string name="connected_to">%1$s に接続しました</string>
+    <string name="connecting_to">%1$s に接続中</string>
+    <string name="ended_on">%1$s で終了しました</string>
+    <string name="loading_on">%1$s で読み込み中</string>
+    <string name="no_devices">テレビが見つかりません。テレビの電源が入っていて同じ Wi-Fi にあるか確認してください。</string>
+    <string name="paused_on">%1$s で一時停止中</string>
+    <string name="playing_on">%1$s で再生中</string>
+    <string name="pause">一時停止</string>
+    <string name="invalid_ip">192.168.1.20 のような IP アドレスを入力</string>
+    <string name="cast_unsupported">この動画はテレビに送れません</string>
+    <string name="cast_failed">キャストを開始できませんでした: %1$s</string>
 </resources>

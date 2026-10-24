@@ -1,5 +1,6 @@
 package com.orvid.adult;
 
+import com.orvid.net.Streams;
 import com.orvid.net.Diag;
 import com.orvid.net.Fetch;
 
@@ -74,7 +75,7 @@ public final class Web {
                 if (code == 403 || code == 429) throw new IOException("Captcha needed (HTTP " + code + ")");
                 if (code >= 400) throw new IOException("HTTP " + code);
                 try (InputStream in = c.getInputStream()) {
-                    return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                    return new String(Streams.readAll(in), StandardCharsets.UTF_8);
                 }
             });
             Diag.mark(label + " " + text.length() / 1024 + "KB " + (System.currentTimeMillis() - began) + "ms");
@@ -125,7 +126,7 @@ public final class Web {
 
     public static String unescape(String s) {
         if (s == null) return "";
-        return s.replace("&quot;", "\"").replace("&#039;", "'").replace("&#39;", "'").replace("&amp;", "&")
-                .replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ").trim();
+        if (s.indexOf('&') < 0) return s.trim();
+        return org.jsoup.parser.Parser.unescapeEntities(s, false).replace('\u00a0', ' ').trim();
     }
 }

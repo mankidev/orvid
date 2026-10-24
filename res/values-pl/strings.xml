@@ -157,4 +157,25 @@
     <string name="up_next">Następne za %1$d: %2$s
 Dotknij, aby anulować</string>
     <string name="block_screenshots">Blokuj zrzuty i nagrywanie ekranu</string>
+    <string name="published">Opublikowano: %1$s</string>
+    <string name="add">Dodaj</string>
+    <string name="add_by_ip">Dodaj telewizor po adresie IP</string>
+    <string name="cast">Przesyłaj</string>
+    <string name="cast_to">Przesyłaj do</string>
+    <string name="searching">Szukanie telewizorów w tej sieci Wi-Fi</string>
+    <string name="stop_casting">Zatrzymaj przesyłanie</string>
+    <string name="volume">Głośność</string>
+    <string name="casting_channel">Przesyłanie</string>
+    <string name="casting_to">Przesyłanie do %1$s</string>
+    <string name="connected_to">Połączono z %1$s</string>
+    <string name="connecting_to">Łączenie z %1$s</string>
+    <string name="ended_on">Zakończono na %1$s</string>
+    <string name="loading_on">Ładowanie na %1$s</string>
+    <string name="no_devices">Nie znaleziono telewizora. Sprawdź, czy telewizor jest włączony i w tej samej sieci Wi-Fi.</string>
+    <string name="paused_on">Wstrzymano na %1$s</string>
+    <string name="playing_on">Odtwarzanie na %1$s</string>
+    <string name="pause">Wstrzymaj</string>
+    <string name="invalid_ip">Wpisz adres IP, np. 192.168.1.20</string>
+    <string name="cast_unsupported">Tego filmu nie można wysłać do telewizora</string>
+    <string name="cast_failed">Nie udało się rozpocząć przesyłania: %1$s</string>
 </resources>

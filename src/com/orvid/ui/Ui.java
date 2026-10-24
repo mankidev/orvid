@@ -19,6 +19,16 @@ public final class Ui {
     private Ui() {
     }
 
+    private static final long DOUBLE_TAP_MS = 800;
+    private static long lastOpen;
+
+    static boolean doubleTap() {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - lastOpen < DOUBLE_TAP_MS) return true;
+        lastOpen = now;
+        return false;
+    }
+
     public static int dp(Context context, float value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
     }

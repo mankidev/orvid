@@ -57,6 +57,12 @@
             android:orientation="horizontal">
 
             <ImageButton
+                android:id="@+id/ctl_cast"
+                style="@style/PlayerIcon"
+                android:contentDescription="@string/cast"
+                android:src="@drawable/ic_cast_white" />
+
+            <ImageButton
                 android:id="@+id/ctl_download"
                 style="@style/PlayerIcon"
                 android:contentDescription="@string/download"

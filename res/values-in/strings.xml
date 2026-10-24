@@ -157,4 +157,25 @@
     <string name="up_next">Berikutnya dalam %1$d: %2$s
 Ketuk untuk membatalkan</string>
     <string name="block_screenshots">Blokir tangkapan dan rekaman layar</string>
+    <string name="published">Dipublikasikan: %1$s</string>
+    <string name="add">Tambah</string>
+    <string name="add_by_ip">Tambahkan TV dengan alamat IP</string>
+    <string name="cast">Transmisikan</string>
+    <string name="cast_to">Transmisikan ke</string>
+    <string name="searching">Mencari TV di jaringan Wi-Fi ini</string>
+    <string name="stop_casting">Hentikan transmisi</string>
+    <string name="volume">Volume</string>
+    <string name="casting_channel">Transmisi</string>
+    <string name="casting_to">Mentransmisikan ke %1$s</string>
+    <string name="connected_to">Terhubung ke %1$s</string>
+    <string name="connecting_to">Menghubungkan ke %1$s</string>
+    <string name="ended_on">Selesai di %1$s</string>
+    <string name="loading_on">Memuat di %1$s</string>
+    <string name="no_devices">Belum ada TV. Pastikan TV menyala dan di Wi-Fi yang sama.</string>
+    <string name="paused_on">Dijeda di %1$s</string>
+    <string name="playing_on">Diputar di %1$s</string>
+    <string name="pause">Jeda</string>
+    <string name="invalid_ip">Masukkan alamat IP seperti 192.168.1.20</string>
+    <string name="cast_unsupported">Video ini tidak bisa dikirim ke TV</string>
+    <string name="cast_failed">Tidak bisa memulai transmisi: %1$s</string>
 </resources>

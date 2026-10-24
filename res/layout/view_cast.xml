@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/cast_panel"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000"
+    android:clickable="true"
+    android:visibility="gone">
+
+    <ImageView
+        android:id="@+id/cast_art"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.3"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop" />
+
+    <TextView
+        android:id="@+id/cast_state"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_gravity="top"
+        android:layout_marginEnd="144dp"
+        android:drawableStart="@drawable/ic_tv_white"
+        android:drawablePadding="10dp"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:singleLine="true"
+        android:textColor="#FFFFFFFF"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/cast_cc"
+            style="@style/PlayerIcon"
+            android:contentDescription="@string/subtitles"
+            android:src="@drawable/ic_cc_white" />
+
+        <ImageButton
+            android:id="@+id/cast_volume"
+            style="@style/PlayerIcon"
+            android:contentDescription="@string/volume"
+            android:src="@drawable/ic_volume_2_white" />
+
+        <ImageButton
+            android:id="@+id/cast_device"
+            style="@style/PlayerIcon"
+            android:contentDescription="@string/cast"
+            android:src="@drawable/ic_cast_white" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/cast_toggle"
+        android:layout_width="76dp"
+        android:layout_height="76dp"
+        android:layout_gravity="center"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/play"
+        android:padding="10dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_pause_white" />
+
+    <ProgressBar
+        android:id="@+id/cast_busy"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="center"
+        android:indeterminateTint="#FFFFFFFF"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/cast_time"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="30dp"
+        android:paddingStart="16dp"
+        android:shadowColor="#99000000"
+        android:shadowRadius="3"
+        android:textColor="#FFFFFFFF"
+        android:textSize="12sp" />
+
+    <SeekBar
+        android:id="@+id/cast_seek"
+        android:layout_width="match_parent"
+        android:layout_height="24dp"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="4dp"
+        android:max="1000"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:progressDrawable="@drawable/seek_track"
+        android:progressBackgroundTint="#66FFFFFF"
+        android:progressTint="#FFFFFFFF"
+        android:thumbTint="#FFFFFFFF" />
+</FrameLayout>

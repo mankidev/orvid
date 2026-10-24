@@ -25,6 +25,10 @@ public final class FrameGrab implements Frames {
     private static final int FRAME_WIDTH = 320;
     private static final long IDLE_MS = 20000;
     private static final int SEGMENT_MAX = 12 * 1024 * 1024;
+    private static final int SEGMENT_HEAD = 768 * 1024;
+    private static final int PREFETCH = 16;
+    private static final long PREFETCH_DELAY_MS = 3000;
+    private static final int[] PREFETCH_ORDER = prefetchOrder();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     private final String url;
@@ -49,6 +53,7 @@ public final class FrameGrab implements Frames {
     };
     private final Object lock = new Object();
     private int wanted = -1;
+    private int prefetched;
     private Storyboard.Callback waiting;
     private boolean running;
     private volatile boolean broken;
@@ -82,6 +87,50 @@ public final class FrameGrab implements Frames {
         this.circuit = circuit;
         this.durationMs = durationMs;
         this.aspect = aspect;
+        MAIN.postDelayed(this::startPrefetch, PREFETCH_DELAY_MS);
+    }
+
+    private static int[] prefetchOrder() {
+        List<Integer> order = new ArrayList<>();
+        for (int parts = 2; order.size() < PREFETCH; parts *= 2) {
+            for (int i = 1; i < parts && order.size() < PREFETCH; i += 2) {
+                int bucket = i * BUCKETS / parts;
+                if (!order.contains(bucket)) order.add(bucket);
+            }
+        }
+        int[] out = new int[order.size()];
+        for (int i = 0; i < out.length; i++) out[i] = order.get(i);
+        return out;
+    }
+
+    @Override
+    public void stop() {
+        broken = true;
+    }
+
+    private void startPrefetch() {
+        synchronized (lock) {
+            if (running || broken) return;
+            running = true;
+        }
+        worker.execute(this::drain);
+    }
+
+    private int nextPrefetch() {
+        while (prefetched < PREFETCH_ORDER.length) {
+            int bucket = PREFETCH_ORDER[prefetched++];
+            if (frames.get(bucket) == null) return bucket;
+        }
+        return -1;
+    }
+
+    private Bitmap nearest(int bucket) {
+        for (int d = 1; d < BUCKETS; d++) {
+            Bitmap b = bucket - d >= 0 ? frames.get(bucket - d) : null;
+            if (b == null && bucket + d < BUCKETS) b = frames.get(bucket + d);
+            if (b != null) return b;
+        }
+        return null;
     }
 
     @Override
@@ -103,6 +152,8 @@ public final class FrameGrab implements Frames {
             callback.frame(cached);
             return;
         }
+        Bitmap near = nearest(bucket);
+        if (near != null) callback.frame(near);
         synchronized (lock) {
             wanted = bucket;
             waiting = callback;
@@ -117,14 +168,23 @@ public final class FrameGrab implements Frames {
             int bucket;
             Storyboard.Callback callback;
             synchronized (lock) {
-                if (wanted < 0 || broken) {
+                if (broken) {
                     running = false;
                     return;
                 }
-                bucket = wanted;
-                callback = waiting;
-                wanted = -1;
-                waiting = null;
+                if (wanted >= 0) {
+                    bucket = wanted;
+                    callback = waiting;
+                    wanted = -1;
+                    waiting = null;
+                } else {
+                    bucket = nextPrefetch();
+                    callback = null;
+                    if (bucket < 0) {
+                        running = false;
+                        return;
+                    }
+                }
             }
             Bitmap bmp = frames.get(bucket);
             if (bmp == null) {
@@ -174,7 +234,19 @@ public final class FrameGrab implements Frames {
             if (c.start <= ms) s = c;
             else break;
         }
-        byte[] body = get(s.url, s.offset, s.length);
+        boolean whole = s.length > 0 && s.length <= SEGMENT_HEAD;
+        if (!whole) {
+            try {
+                Bitmap head = segmentFrame(get(s.url, s.offset, SEGMENT_HEAD));
+                if (head != null) return head;
+            } catch (IOException e) {
+                Diag.mark("frame grab head FAIL " + e.getMessage());
+            }
+        }
+        return segmentFrame(get(s.url, s.offset, s.length));
+    }
+
+    private Bitmap segmentFrame(byte[] body) throws IOException {
         byte[] data = body;
         if (init != null) {
             data = new byte[init.length + body.length];

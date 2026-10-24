@@ -65,6 +65,7 @@ final class MiniPlayer {
         public void onRenderedFirstFrame() {
             cover.removeCallbacks(showCover);
             cover.setVisibility(View.GONE);
+            Session.frame = null;
         }
     };
 
@@ -105,11 +106,18 @@ final class MiniPlayer {
         ((TextView) root.findViewById(R.id.mini_author)).setText(Session.author);
         freshSurface();
         fit(p.getVideoSize());
-        cover.setVisibility(View.GONE);
         cover.removeCallbacks(showCover);
-        cover.postDelayed(showCover, COVER_DELAY_MS);
-        int coverWidth = cover.getLayoutParams().width > 0 ? cover.getLayoutParams().width : Ui.dp(activity, 150);
-        OrvidApp.get().images().load(cover, Session.thumb, coverWidth, Session.url());
+        if (Session.frame != null) {
+            cover.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            cover.setImageBitmap(Session.frame);
+            cover.setVisibility(View.VISIBLE);
+        } else {
+            cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            cover.setVisibility(View.GONE);
+            cover.postDelayed(showCover, COVER_DELAY_MS);
+            int coverWidth = cover.getLayoutParams().width > 0 ? cover.getLayoutParams().width : Ui.dp(activity, 150);
+            OrvidApp.get().images().load(cover, Session.thumb, coverWidth, Session.url());
+        }
         p.setVideoTextureView(video);
         p.addListener(listener);
         attached = p;

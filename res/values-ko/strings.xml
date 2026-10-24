@@ -157,4 +157,25 @@
     <string name="up_next">%1$d초 후 다음: %2$s
 탭하여 취소</string>
     <string name="block_screenshots">스크린샷 및 화면 녹화 차단</string>
+    <string name="published">게시일: %1$s</string>
+    <string name="add">추가</string>
+    <string name="add_by_ip">IP 주소로 TV 추가</string>
+    <string name="cast">전송</string>
+    <string name="cast_to">전송할 기기</string>
+    <string name="searching">이 Wi-Fi 네트워크에서 TV를 찾는 중</string>
+    <string name="stop_casting">전송 중지</string>
+    <string name="volume">볼륨</string>
+    <string name="casting_channel">전송</string>
+    <string name="casting_to">%1$s(으)로 전송 중</string>
+    <string name="connected_to">%1$s에 연결됨</string>
+    <string name="connecting_to">%1$s에 연결 중</string>
+    <string name="ended_on">%1$s에서 재생 끝남</string>
+    <string name="loading_on">%1$s에서 불러오는 중</string>
+    <string name="no_devices">아직 TV를 찾지 못했습니다. TV가 켜져 있고 같은 Wi-Fi에 있는지 확인하세요.</string>
+    <string name="paused_on">%1$s에서 일시정지됨</string>
+    <string name="playing_on">%1$s에서 재생 중</string>
+    <string name="pause">일시정지</string>
+    <string name="invalid_ip">192.168.1.20 같은 IP 주소를 입력하세요</string>
+    <string name="cast_unsupported">이 동영상은 TV로 보낼 수 없습니다</string>
+    <string name="cast_failed">전송을 시작할 수 없습니다: %1$s</string>
 </resources>
