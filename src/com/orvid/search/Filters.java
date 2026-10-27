@@ -41,35 +41,20 @@ public final class Filters {
     private static final long JUNK_LONG_S = 3 * 3600;
     public static volatile Filters current;
 
-    public static final int ORIENT_ANY = 0;
-    public static final int ORIENT_STRAIGHT = 1;
-    public static final int ORIENT_GAY = 2;
-    public static final int ORIENT_TRANS = 3;
-    private static final java.util.regex.Pattern GAY_WORDS = java.util.regex.Pattern.compile(
+    private static final java.util.regex.Pattern LGBT_WORDS = java.util.regex.Pattern.compile(
             "\\b(gay|gays|twink|twinks|homo|homosexual|male on male|man on man|men on men|guy on guy|dude on dude|boy on boy|"
-                    + "bareback gay|gaysex|gay sex|str8 guy|bi guys|bisexual men|frat boys?|muscle hunk|hunks)\\b");
-    private static final java.util.regex.Pattern TRANS_WORDS = java.util.regex.Pattern.compile(
-            "\\b(trans|transgender|transsexual|tranny|trannies|shemale|shemales|she male|ladyboy|ladyboys|tgirl|tgirls|t girl|"
-                    + "ts|ts girl|travesti|travestis|futanari|futa|newhalf|femboy|femboys|sissy|crossdresser|crossdressers)\\b");
-    private static final java.util.Set<String> GAY_SOURCES = new java.util.HashSet<>(java.util.Arrays.asList("gayporntube", "boyfriendtv"));
-    private static final java.util.Set<String> TRANS_SOURCES = new java.util.HashSet<>(java.util.Arrays.asList("ashemaletube"));
-    public int orientation;
+                    + "bareback gay|gaysex|gay sex|str8 guy|bi guys|bisexual men|frat boys?|muscle hunk|hunks|"
+                    + "trans|transgender|transsexual|tranny|trannies|shemale|shemales|she male|ladyboy|ladyboys|tgirl|tgirls|t girl|"
+                    + "ts|ts girl|travesti|travestis|futanari|futa|newhalf|femboy|femboys|sissy|crossdresser|crossdressers|"
+                    + "lesbian|lesbians|lesbo|lesbos|lesbi|lezbiyen|girl on girl|girls on girls|woman on woman|women on women|"
+                    + "queer|lgbt|lgbtq)\\b");
 
-    private static boolean gaySource(Source s) {
-        return GAY_SOURCES.contains(s.key) || "gay".equals(s.orientation);
-    }
-
-    private static boolean transSource(Source s) {
-        return TRANS_SOURCES.contains(s.key) || "trans".equals(s.orientation);
+    private static boolean lgbtSource(Source s) {
+        return s.orientation != null && !s.orientation.isEmpty() && !"straight".equals(s.orientation);
     }
 
     public boolean sourceFits(Source s) {
-        if (!s.adult || orientation == ORIENT_ANY) return true;
-        boolean gay = gaySource(s);
-        boolean trans = transSource(s);
-        if (orientation == ORIENT_STRAIGHT) return !gay && !trans;
-        if (orientation == ORIENT_GAY) return !trans;
-        return !gay;
+        return !s.adult || !lgbtSource(s);
     }
 
     public boolean serviceOn(int serviceId) {
@@ -80,16 +65,12 @@ public final class Filters {
         return src == null || on(src);
     }
 
-    public boolean orientationAccepts(StreamInfoItem item) {
-        if (orientation == ORIENT_ANY) return true;
+    public static boolean straight(StreamInfoItem item) {
         Source src = Source.BY_SERVICE.get(item.getServiceId());
         if (src == null || !src.adult) return true;
+        if (lgbtSource(src)) return false;
         String title = Query.fold(item.getName() == null ? "" : item.getName()).replace('-', ' ');
-        boolean gay = gaySource(src) || GAY_WORDS.matcher(title).find();
-        boolean trans = transSource(src) || TRANS_WORDS.matcher(title).find();
-        if (orientation == ORIENT_STRAIGHT) return !gay && !trans;
-        if (orientation == ORIENT_GAY) return gay && !trans;
-        return trans;
+        return !LGBT_WORDS.matcher(title).find();
     }
 
     public boolean youtube = true;
@@ -114,7 +95,6 @@ public final class Filters {
         f.sort = sort;
         f.hideAdult = hideAdult;
         f.hideJunk = hideJunk;
-        f.orientation = orientation;
         f.youtube = youtube;
         f.dailymotion = dailymotion;
         f.vk = vk;
@@ -145,7 +125,7 @@ public final class Filters {
 
     public String key() {
         StringBuilder b = new StringBuilder().append(date).append(',').append(type).append(',').append(duration)
-                .append(',').append(sort).append(',').append(orientation).append(',').append(youtube).append(dailymotion)
+                .append(',').append(sort).append(',').append(youtube).append(dailymotion)
                 .append(vk).append(hideAdult).append(hideJunk);
         for (java.util.Map.Entry<String, Boolean> e : new java.util.TreeMap<>(sources).entrySet()) {
             b.append(',').append(e.getKey()).append('=').append(e.getValue());
@@ -228,7 +208,7 @@ public final class Filters {
     public boolean accepts(StreamInfoItem item) {
         if (!serviceOn(item.getServiceId())) return false;
         if (NotInterested.hides(item)) return false;
-        if (!orientationAccepts(item)) return false;
+        if (!straight(item)) return false;
         long since = since();
         if (since > 0) {
             long when = epoch(item);

@@ -99,10 +99,6 @@
     <string name="not_interested_done">Jasne. Podobne filmy nie będą już proponowane.</string>
     <string name="source_off">Wyłącz to źródło</string>
     <string name="source_off_done">%1$s jest wyłączone. Możesz je włączyć ponownie w filtrach.</string>
-    <string name="filter_orientation">Orientacja</string>
-    <string name="orient_straight">Hetero</string>
-    <string name="orient_gay">Gej</string>
-    <string name="orient_trans">Trans</string>
     <string name="next_video">Następny film</string>
     <string name="previous_video">Poprzedni film</string>
     <string name="nothing_here">Nic tu jeszcze nie ma. Dodaj repozytorium źródeł, aby zacząć szukać.</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">Skopiowano dziennik wyszukiwania</string>
     <string name="trace_running">Przeszukuje źródła: %1$d</string>
     <string name="health_skipped">nie odpowiada, pominięto</string>
+    <string name="tor_off_only">Działa tylko przy wyłączonym Torze</string>
     <string name="health_down">Nie odpowiada. Wyłącz i włącz, aby spróbować ponownie.</string>
     <string name="health_flaky">Sprawiało problemy w ostatnich wyszukiwaniach</string>
     <string name="health_empty">Nie zwróciło jeszcze żadnych wyników</string>

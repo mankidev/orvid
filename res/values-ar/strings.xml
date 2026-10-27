@@ -99,10 +99,6 @@
     <string name="not_interested_done">حسنًا. لن يتم اقتراح فيديوهات مثل هذا.</string>
     <string name="source_off">إيقاف هذا المصدر</string>
     <string name="source_off_done">تم إيقاف %1$s. يمكنك تشغيله مجددًا من عوامل التصفية.</string>
-    <string name="filter_orientation">التوجه</string>
-    <string name="orient_straight">مغاير</string>
-    <string name="orient_gay">مثلي</string>
-    <string name="orient_trans">عابر</string>
     <string name="next_video">الفيديو التالي</string>
     <string name="previous_video">الفيديو السابق</string>
     <string name="nothing_here">لا يوجد شيء هنا بعد. أضف مستودع مصادر لتبدأ البحث.</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">تم نسخ سجل البحث</string>
     <string name="trace_running">جارٍ البحث في %1$d مصدر</string>
     <string name="health_skipped">لا يستجيب، تم التخطي</string>
+    <string name="tor_off_only">يعمل فقط عند إيقاف Tor</string>
     <string name="health_down">لا يستجيب. أوقفه وشغّله لإعادة المحاولة.</string>
     <string name="health_flaky">واجه مشاكل في عمليات البحث الأخيرة</string>
     <string name="health_empty">لم يُرجع أي نتائج حتى الآن</string>

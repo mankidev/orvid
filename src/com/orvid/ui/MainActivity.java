@@ -136,7 +136,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
         Filters.current = filters;
         com.orvid.yt.Related.safeSearch = filters.hideAdult;
         adapter = new VideoAdapter(this, OrvidApp.get().layoutMode(), item -> {
-            touchedList = true;
             if (Ui.doubleTap()) return;
             com.orvid.ext.ExtSource ext = com.orvid.ext.Registry.forUrl(item.getUrl());
             if (ext != null ? ext.webPlayback : com.orvid.web.WebSites.forUrl(item.getUrl()) != null) {
@@ -227,7 +226,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
             @Override
             public void onScrollStateChanged(AbsListView view, int scrollState) {
                 adapter.setIdle(scrollState == SCROLL_STATE_IDLE);
-                if (scrollState != SCROLL_STATE_IDLE) touchedList = true;
                 list.removeCallbacks(prepareVisible);
                 list.removeCallbacks(prepareLater);
                 prepareWaitStarted = 0;
@@ -239,7 +237,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
                 adapter.checkPreview();
                 if (shown && first > list.getHeaderViewsCount()) scrolledAway = true;
                 adapter.prefetchAfter(Math.max(0, first + visible - list.getHeaderViewsCount()) * adapter.columns());
-                if (total > 0 && first + visible >= total - 12) loadMore();
+                if (total > 0 && first + visible >= total - Math.max(12, visible * 3)) loadMore();
             }
         });
 
@@ -541,7 +539,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
         rankDirty = false;
         shown = false;
         scrolledAway = false;
-        touchedList = false;
         com.orvid.search.Ranker.reseed();
         arrived = null;
         final Query q = Query.parse(input);
@@ -672,6 +669,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
             showMessage(getString(blank ? R.string.browse_none : R.string.no_results));
         }
         startedSources = pendingSources;
+        firstWave = jobs.size();
         java.util.Collections.sort(jobs);
         for (Queued job : jobs) SEARCH.execute(job);
         if (fromMemory) scheduleSecondWave(generation);
@@ -689,6 +687,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private String rememberKey;
     private boolean fromMemory;
     private int startedSources;
+    private int firstWave;
     private int failedSources;
 
     private static final class Remembered {
@@ -899,7 +898,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     private static boolean onlyTurnedOff(Filters before, Filters now) {
         if (before.date != now.date || before.type != now.type || before.duration != now.duration
-                || before.sort != now.sort || before.orientation != now.orientation
+                || before.sort != now.sort
                 || before.hideAdult != now.hideAdult || before.hideJunk != now.hideJunk) return false;
         if (now.youtube && !before.youtube || now.dailymotion && !before.dailymotion || now.vk && !before.vk) return false;
         for (Source s : Sources.current()) if (now.on(s) && !before.on(s)) return false;
@@ -1151,11 +1150,17 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     private void stopPaging(boolean[] dropped, String why) {
         for (int i = 0; i < dropped.length && i < noMore.length; i++) {
-            if (dropped[i] && !noMore[i]) {
+            if (dropped[i] && !noMore[i] && !portal(i)) {
                 noMore[i] = true;
                 Diag.mark("source " + i + " " + why + ", no more pages");
             }
         }
+    }
+
+    private boolean portal(int slot) {
+        if (slot < CORE || slot - CORE >= extras.size()) return false;
+        Source s = extras.get(slot - CORE);
+        return s instanceof com.orvid.ext.ExtSource && ((com.orvid.ext.ExtSource) s).portal;
     }
 
     private static boolean[] repeating(List<List<StreamInfoItem>> lists, java.util.Set<String> shown) {
@@ -1182,13 +1187,12 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private static final long VK_HEDGE_MS = 2500;
     private static final long EXTRA_HEDGE_MS = 0;
 
-    private static final long GRACE_MS = 600;
+    private static final long GRACE_MS = 2000;
     private static final long YOUTUBE_WAIT_MS = 6000;
     private boolean youtubePending;
     private List<List<StreamInfoItem>> arrived;
     private boolean shown;
     private boolean scrolledAway;
-    private boolean touchedList;
     private Runnable flush;
     private boolean graceOver;
 
@@ -1210,7 +1214,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         for (StreamInfoItem i : items) if (have.add(i.getUrl())) merged.add(i);
         arrived.set(source, merged);
         if (!shown) {
-            if (pendingSources <= 0 || graceOver || source == 0) {
+            if (pendingSources <= 0 || graceOver || (startedSources - pendingSources) * 2 >= firstWave) {
                 if (flush != null) list.removeCallbacks(flush);
                 flush = null;
                 requestRank(generation, true);
@@ -1378,7 +1382,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private void mergeTail(List<StreamInfoItem> ranked) {
         List<StreamInfoItem> current = adapter.items();
         int visible = Math.max(0, list.getLastVisiblePosition() - list.getHeaderViewsCount() + 1);
-        int keep = touchedList ? Math.min(current.size(), visible * adapter.columns() + 4) : 0;
+        int keep = Math.min(current.size(), visible * adapter.columns() + 4);
         if (scrolledAway) while (keep < current.size() && !adapter.inTail(current.get(keep))) keep++;
         int strict = com.orvid.search.Ranker.Ranked.strict(ranked);
         List<StreamInfoItem> head = new ArrayList<>(current.subList(0, keep));
@@ -1459,7 +1463,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private String emptyMessage() {
         List<String> active = new ArrayList<>();
         if (filters.date != Filters.DATE_ANY) active.add(getString(R.string.filter_date));
-        if (filters.orientation != Filters.ORIENT_ANY) active.add(getString(R.string.filter_orientation));
         if (filters.duration != Filters.DURATION_ANY) active.add(getString(R.string.filter_duration));
         if (filters.type != Filters.TYPE_ALL) active.add(getString(R.string.filter_type));
         return active.isEmpty() ? getString(R.string.no_results)

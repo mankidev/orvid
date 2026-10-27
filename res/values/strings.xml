@@ -103,10 +103,6 @@
     <string name="not_interested_done">Got it. Videos like this won\'t be suggested.</string>
     <string name="source_off">Turn off this source</string>
     <string name="source_off_done">%1$s is turned off. You can turn it back on in filters.</string>
-    <string name="filter_orientation">Orientation</string>
-    <string name="orient_straight">Straight</string>
-    <string name="orient_gay">Gay</string>
-    <string name="orient_trans">Trans</string>
     <string name="next_video">Next video</string>
     <string name="previous_video">Previous video</string>
     <string name="nothing_here">Nothing to show here yet. Add a source repository to start searching.</string>
@@ -150,6 +146,7 @@
     <string name="trace_copied">Search log copied</string>
     <string name="trace_running">Searching %1$d sources</string>
     <string name="health_skipped">not responding, skipped</string>
+    <string name="tor_off_only">Works only when Tor is off</string>
     <string name="health_down">Not responding. Turn it off and on to try again.</string>
     <string name="health_flaky">Had problems in recent searches</string>
     <string name="health_empty">Hasn\'t returned any results yet</string>

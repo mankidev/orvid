@@ -99,10 +99,6 @@
     <string name="not_interested_done">Entendido. No se sugerirán vídeos como este.</string>
     <string name="source_off">Desactivar esta fuente</string>
     <string name="source_off_done">%1$s está desactivada. Puedes volver a activarla en los filtros.</string>
-    <string name="filter_orientation">Orientación</string>
-    <string name="orient_straight">Hetero</string>
-    <string name="orient_gay">Gay</string>
-    <string name="orient_trans">Trans</string>
     <string name="next_video">Siguiente vídeo</string>
     <string name="previous_video">Vídeo anterior</string>
     <string name="nothing_here">Aún no hay nada aquí. Añade un repositorio de fuentes para empezar a buscar.</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">Registro de búsqueda copiado</string>
     <string name="trace_running">Buscando en %1$d fuentes</string>
     <string name="health_skipped">no responde, omitido</string>
+    <string name="tor_off_only">Solo funciona con Tor desactivado</string>
     <string name="health_down">No responde. Apágalo y enciéndelo para volver a intentarlo.</string>
     <string name="health_flaky">Ha dado problemas en las últimas búsquedas</string>
     <string name="health_empty">Todavía no ha dado ningún resultado</string>

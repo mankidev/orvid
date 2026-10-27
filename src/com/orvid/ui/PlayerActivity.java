@@ -222,7 +222,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
 
             @Override
             public void onScroll(android.widget.AbsListView view, int first, int visible, int total) {
-                if (related.getCount() > 0 && first + visible >= total - 12) {
+                if (related.getCount() > 0 && first + visible >= total - Math.max(12, visible * 3)) {
                     if (!hiddenRelated.isEmpty()) {
                         relatedShown += RELATED_STEP;
                         reveal(java.util.Collections.<StreamInfoItem>emptyList());
@@ -1357,12 +1357,18 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 final String query = sameKeys;
                 try {
                     if (own != null && !own.slow()) {
-                        same.addAll(Fetch.retrying(c, cc -> own.search(cc, query, filters, null)).items);
+                        com.orvid.search.Source.Page p = Fetch.retrying(c, cc -> own.search(cc, query, filters, null));
+                        same.addAll(p.items);
+                        addCursor(sourceCursor(own, query, filters, p.next));
                     } else if (service == com.orvid.dm.Dailymotion.SERVICE_ID) {
-                        same.addAll(Fetch.retrying(c, cc -> com.orvid.dm.Dailymotion.search(cc, query, 1,
-                                filters.dailymotionParams(), false)).items);
+                        com.orvid.dm.Dailymotion.Page p = Fetch.retrying(c, cc -> com.orvid.dm.Dailymotion.search(cc, query, 1,
+                                filters.dailymotionParams(), false));
+                        same.addAll(p.items);
+                        if (p.hasMore) addCursor(dailymotionCursor(query, 2, filters.dailymotionParams()));
                     } else if (service == com.orvid.vk.Vk.SERVICE_ID) {
-                        same.addAll(Fetch.retrying(c, cc -> com.orvid.vk.Vk.search(cc, query, null)).items);
+                        com.orvid.vk.Vk.Page p = Fetch.retrying(c, cc -> com.orvid.vk.Vk.search(cc, query, null));
+                        same.addAll(p.items);
+                        addCursor(vkCursor(query, p.next));
                     }
                 } catch (Exception e) {
                     Diag.mark("related same-source FAIL " + e);
@@ -1387,12 +1393,16 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         }.startBackground();
     }
 
-    private static List<StreamInfoItem> relatedFromOthers(String keys, com.orvid.search.Source own, boolean adult,
-                                                          com.orvid.search.Filters filters) {
+    private List<StreamInfoItem> relatedFromOthers(String keys, com.orvid.search.Source own, boolean adult,
+                                                   com.orvid.search.Filters filters) {
         com.orvid.search.Query q = com.orvid.search.Query.parse(keys);
         List<java.util.concurrent.Callable<List<StreamInfoItem>>> jobs = new ArrayList<>();
         if (!adult && filters.youtube && com.orvid.ext.Registry.engineOn("youtube")) {
-            jobs.add(() -> Fetch.retrying(Visionos.takeCircuit(), cc -> com.orvid.yt.Search.first(cc, keys, null)).items);
+            jobs.add(() -> {
+                com.orvid.yt.Search.Page p = Fetch.retrying(Visionos.takeCircuit(), cc -> com.orvid.yt.Search.first(cc, keys, null));
+                addCursor(youtubeCursor(p.continuation));
+                return p.items;
+            });
         }
         List<com.orvid.search.Source> pool = new ArrayList<>();
         for (com.orvid.search.Source s : Sources.current()) {
@@ -1401,8 +1411,16 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         }
         pool.sort((x, y) -> Double.compare(y.weight, x.weight));
         for (com.orvid.search.Source s : pool.subList(0, Math.min(3, pool.size()))) {
-            jobs.add(() -> Fetch.retrying(Fetch.newCircuit("rel"), cc -> s.search(cc, keys, filters, null)).items);
+            jobs.add(() -> {
+                com.orvid.search.Source.Page p = Fetch.retrying(Fetch.newCircuit("rel"), cc -> s.search(cc, keys, filters, null));
+                addCursor(sourceCursor(s, keys, filters, p.next));
+                return p.items;
+            });
         }
+        return runAll(jobs);
+    }
+
+    private static List<StreamInfoItem> runAll(List<java.util.concurrent.Callable<List<StreamInfoItem>>> jobs) {
         List<StreamInfoItem> out = new ArrayList<>();
         if (jobs.isEmpty()) return out;
         java.util.concurrent.ExecutorService ex = java.util.concurrent.Executors.newFixedThreadPool(jobs.size());
@@ -1432,9 +1450,10 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         new Job<List<StreamInfoItem>>(this) {
             @Override
             protected List<StreamInfoItem> load() throws Exception {
-                List<StreamInfoItem> found = com.orvid.yt.Search.first(c0, keys, null).items;
+                com.orvid.yt.Search.Page p = com.orvid.yt.Search.first(c0, keys, null);
+                addCursor(youtubeCursor(p.continuation));
                 return com.orvid.search.Ranker.similar(title, channel, pageUrl,
-                        java.util.Collections.<StreamInfoItem>emptyList(), found, false, minimum);
+                        java.util.Collections.<StreamInfoItem>emptyList(), p.items, false, minimum);
             }
 
             @Override
@@ -1478,7 +1497,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         List<StreamInfoItem> repeats = new ArrayList<>();
         for (StreamInfoItem i : items) {
             if (!com.orvid.search.Ranker.sameScript(own, i.getName())) continue;
-            if (sourceOn(allowed, i) && allowed.orientationAccepts(i) && relatedSeen.add(i.getUrl())) {
+            if (sourceOn(allowed, i) && com.orvid.search.Filters.straight(i) && relatedSeen.add(i.getUrl())) {
                 (recentlyShown(i.getUrl()) ? repeats : fresh).add(i);
             }
         }
@@ -1524,8 +1543,15 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     private void loadMoreRelated() {
         if (relatedLoading) return;
         final String token = relatedToken;
+        if (relatedEmptyPages >= RELATED_EMPTY_LIMIT) {
+            loadMoreFromCursors();
+            return;
+        }
         final String seed = token == null ? nextSeed() : null;
-        if (token == null && seed == null) return;
+        if (token == null && seed == null) {
+            loadMoreFromCursors();
+            return;
+        }
         relatedLoading = true;
         final String c0 = circuit != null ? circuit : Visionos.takeCircuit();
         final String own = ((TextView) header.findViewById(R.id.name)).getText().toString();
@@ -1563,7 +1589,114 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 Session.relatedToken = relatedToken;
                 relatedLoading = false;
                 relatedEmptyPages = fresh.isEmpty() ? relatedEmptyPages + 1 : 0;
-                if (fresh.isEmpty() && relatedEmptyPages < RELATED_EMPTY_LIMIT) loadMoreRelated();
+                if (fresh.isEmpty()) loadMoreRelated();
+            }
+
+            @Override
+            protected void fail(Exception error) {
+                relatedLoading = false;
+            }
+        }.startBackground();
+    }
+
+    private interface Cursor {
+        Step step() throws Exception;
+    }
+
+    private static final class Step {
+        final List<StreamInfoItem> items;
+        final Cursor next;
+
+        Step(List<StreamInfoItem> items, Cursor next) {
+            this.items = items;
+            this.next = next;
+        }
+    }
+
+    private final List<Cursor> cursors = new ArrayList<>();
+    private int cursorEmptyRounds;
+    private static final int CURSOR_EMPTY_LIMIT = 3;
+
+    private void addCursor(Cursor c) {
+        if (c == null) return;
+        synchronized (cursors) {
+            cursors.add(c);
+        }
+    }
+
+    private static Cursor sourceCursor(com.orvid.search.Source s, String query, com.orvid.search.Filters f, String next) {
+        if (next == null || next.isEmpty()) return null;
+        return () -> {
+            com.orvid.search.Source.Page p = Fetch.retrying(Fetch.newCircuit("rel"), cc -> s.search(cc, query, f, next));
+            return new Step(p.items, sourceCursor(s, query, f, p.next));
+        };
+    }
+
+    private static Cursor youtubeCursor(String token) {
+        if (token == null || token.isEmpty()) return null;
+        return () -> {
+            com.orvid.yt.Search.Page p = Fetch.retrying(Visionos.takeCircuit(), cc -> com.orvid.yt.Search.more(cc, token));
+            return new Step(p.items, youtubeCursor(p.continuation));
+        };
+    }
+
+    private static Cursor dailymotionCursor(String query, int page, String params) {
+        return () -> {
+            com.orvid.dm.Dailymotion.Page p = Fetch.retrying(Fetch.newCircuit("rel"),
+                    cc -> com.orvid.dm.Dailymotion.search(cc, query, page, params, false));
+            return new Step(p.items, p.hasMore ? dailymotionCursor(query, page + 1, params) : null);
+        };
+    }
+
+    private static Cursor vkCursor(String query, String next) {
+        if (next == null || next.isEmpty()) return null;
+        return () -> {
+            com.orvid.vk.Vk.Page p = Fetch.retrying(Fetch.newCircuit("rel"), cc -> com.orvid.vk.Vk.search(cc, query, next));
+            return new Step(p.items, vkCursor(query, p.next));
+        };
+    }
+
+    private void loadMoreFromCursors() {
+        if (relatedLoading || relatedPending > 0 || isFinishing()) return;
+        final List<Cursor> now;
+        synchronized (cursors) {
+            now = new ArrayList<>(cursors);
+            cursors.clear();
+        }
+        if (now.isEmpty()) {
+            if (relatedFallbacks < 3) {
+                relatedFallbacks++;
+                loadRelatedFallback(relatedFallbacks);
+            }
+            return;
+        }
+        relatedLoading = true;
+        final String title = ((TextView) header.findViewById(R.id.name)).getText().toString();
+        final String channel = ((TextView) header.findViewById(R.id.uploader)).getText().toString();
+        new Job<List<StreamInfoItem>>(this) {
+            @Override
+            protected List<StreamInfoItem> load() {
+                List<java.util.concurrent.Callable<List<StreamInfoItem>>> jobs = new ArrayList<>();
+                for (Cursor c : now) {
+                    jobs.add(() -> {
+                        Step st = c.step();
+                        addCursor(st.next);
+                        return st.items;
+                    });
+                }
+                return com.orvid.search.Ranker.similar(title, channel, pageUrl,
+                        java.util.Collections.<StreamInfoItem>emptyList(), runAll(jobs), false, RELATED_MIN);
+            }
+
+            @Override
+            protected void show(List<StreamInfoItem> items) {
+                relatedLoading = false;
+                int before = related.getCount() + hiddenRelated.size();
+                appendRelated(items);
+                boolean grew = related.getCount() + hiddenRelated.size() > before;
+                Diag.mark("related cursors " + now.size() + " -> " + items.size() + (grew ? "" : " none new"));
+                cursorEmptyRounds = grew ? 0 : cursorEmptyRounds + 1;
+                if (!grew && cursorEmptyRounds < CURSOR_EMPTY_LIMIT) loadMoreFromCursors();
             }
 
             @Override

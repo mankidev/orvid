@@ -102,7 +102,9 @@ final class FilterSheet {
             dialog.dismiss();
         };
         for (com.orvid.ext.Repos.Repo r : com.orvid.ext.Repos.list(com.orvid.app.OrvidApp.get().extRoot())) {
-            row(activity, column, r.name + " (" + r.count + ")", R.drawable.ic_filter, () -> RepoDialog.manage(activity, r, reload));
+            if (r.adult && !com.orvid.search.Source.adultUnlocked) continue;
+            TextView repoRow = row(activity, column, r.name + " (" + r.count + ")", R.drawable.ic_filter, () -> RepoDialog.manage(activity, r, reload));
+            markStale(activity, repoRow, r);
         }
         for (com.orvid.ext.Repos.Link l : com.orvid.ext.Repos.suggested(com.orvid.app.OrvidApp.get().extRoot())) {
             if (l.adult && !com.orvid.search.Source.adultUnlocked) continue;
@@ -195,7 +197,9 @@ final class FilterSheet {
                 changed[0] = true;
             });
             int health = com.orvid.search.Health.state(s.key);
-            if (health != com.orvid.search.Health.OK) markHealth(activity, column, sw, health);
+            if (s instanceof com.orvid.ext.ExtSource && ((com.orvid.ext.ExtSource) s).torless && com.orvid.net.Fetch.torMode()) {
+                markNote(activity, column, sw, activity.getString(R.string.tor_off_only), 0xFF8A8A8A);
+            } else if (health != com.orvid.search.Health.OK) markHealth(activity, column, sw, health);
             if (!s.adult) normalSwitches.add(sw);
             if (s.adult) {
                 adultSwitches.add(sw);
@@ -253,15 +257,6 @@ final class FilterSheet {
             }
         });
 
-
-        if (com.orvid.search.Source.adultUnlocked) {
-            section(activity, column, R.string.filter_orientation);
-            chips(activity, column, new int[] {R.string.filter_any, R.string.orient_straight, R.string.orient_gay, R.string.orient_trans},
-                    filters.orientation, i -> {
-                        filters.orientation = i;
-                        changed[0] = true;
-                    });
-        }
 
         section(activity, column, R.string.privacy);
         com.orvid.app.AppLock lock = com.orvid.app.OrvidApp.get().lock();
@@ -327,7 +322,42 @@ final class FilterSheet {
         void pick(boolean on);
     }
 
-    private static void row(Activity a, LinearLayout column, String text, int icon, Runnable click) {
+    private static void markStale(Activity a, TextView row, com.orvid.ext.Repos.Repo r) {
+        Boolean known = com.orvid.ext.Repos.knownStale(r);
+        if (known != null) showStale(a, row, known);
+        new com.orvid.app.Job<Boolean>(a) {
+            @Override
+            protected Boolean load() throws Exception {
+                return com.orvid.ext.Repos.stale(com.orvid.app.OrvidApp.get().extRoot(), r,
+                        com.orvid.net.Fetch.newCircuit("repo"));
+            }
+
+            @Override
+            protected void show(Boolean stale) {
+                showStale(a, row, stale);
+            }
+
+            @Override
+            protected void fail(Exception error) {
+            }
+        }.startBackground();
+    }
+
+    private static void showStale(Activity a, TextView row, boolean stale) {
+        android.graphics.drawable.Drawable[] now = row.getCompoundDrawablesRelative();
+        android.graphics.drawable.Drawable mark = null;
+        if (stale) {
+            mark = a.getDrawable(R.drawable.ic_download_white);
+            if (mark != null) {
+                int size = Ui.dp(a, 20);
+                mark.setBounds(0, 0, size, size);
+                mark.setTint(a.getColor(R.color.accent));
+            }
+        }
+        row.setCompoundDrawablesRelative(now[0], null, mark, null);
+    }
+
+    private static TextView row(Activity a, LinearLayout column, String text, int icon, Runnable click) {
         TextView row = new TextView(a);
         row.setText(text);
         android.graphics.drawable.Drawable d = a.getDrawable(icon);
@@ -345,6 +375,7 @@ final class FilterSheet {
         row.setOnClickListener(v -> click.run());
         column.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
+        return row;
     }
 
     private static void section(Activity a, LinearLayout column, int title) {
@@ -382,6 +413,10 @@ final class FilterSheet {
         boolean down = health == com.orvid.search.Health.DOWN;
         String note = a.getString(down ? R.string.health_down
                 : health == com.orvid.search.Health.EMPTY ? R.string.health_empty : R.string.health_flaky);
+        markNote(a, column, sw, note, down ? 0xFFE5484D : 0xFFE5A000);
+    }
+
+    private static void markNote(Activity a, LinearLayout column, Switch sw, String note, int tint) {
         LinearLayout row = new LinearLayout(a);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -399,7 +434,7 @@ final class FilterSheet {
         sw.setCompoundDrawablesRelative(null, null, null, null);
         android.widget.ImageButton alert = new android.widget.ImageButton(a);
         alert.setImageResource(R.drawable.ic_alert);
-        alert.setImageTintList(android.content.res.ColorStateList.valueOf(down ? 0xFFE5484D : 0xFFE5A000));
+        alert.setImageTintList(android.content.res.ColorStateList.valueOf(tint));
         alert.setBackground(null);
         alert.setContentDescription(note);
         int pad = Ui.dp(a, 10);

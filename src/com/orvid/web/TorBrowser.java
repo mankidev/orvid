@@ -82,6 +82,11 @@ public final class TorBrowser {
             ready.unavailable("webview");
             return;
         }
+        if (!Fetch.torMode()) {
+            ProxyController.getInstance().clearProxyOverride(command -> runOnMain(context, command),
+                    () -> ready.ready(create(context)));
+            return;
+        }
         background.execute(() -> {
             int port;
             try {

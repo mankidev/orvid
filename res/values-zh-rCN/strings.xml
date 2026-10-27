@@ -99,10 +99,6 @@
     <string name="not_interested_done">知道了。不会再推荐类似的视频。</string>
     <string name="source_off">关闭此来源</string>
     <string name="source_off_done">已关闭 %1$s。可在筛选中重新开启。</string>
-    <string name="filter_orientation">性取向</string>
-    <string name="orient_straight">异性恋</string>
-    <string name="orient_gay">男同</string>
-    <string name="orient_trans">跨性别</string>
     <string name="next_video">下一个视频</string>
     <string name="previous_video">上一个视频</string>
     <string name="nothing_here">这里还没有内容。添加一个来源仓库即可开始搜索。</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">已复制搜索日志</string>
     <string name="trace_running">正在搜索 %1$d 个来源</string>
     <string name="health_skipped">无响应，已跳过</string>
+    <string name="tor_off_only">仅在关闭 Tor 时可用</string>
     <string name="health_down">无响应。关闭后再打开即可重试。</string>
     <string name="health_flaky">最近的搜索中出现问题</string>
     <string name="health_empty">尚未返回任何结果</string>

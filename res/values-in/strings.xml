@@ -99,10 +99,6 @@
     <string name="not_interested_done">Oke. Video seperti ini tidak akan disarankan.</string>
     <string name="source_off">Matikan sumber ini</string>
     <string name="source_off_done">%1$s dimatikan. Anda bisa menyalakannya lagi di filter.</string>
-    <string name="filter_orientation">Orientasi</string>
-    <string name="orient_straight">Hetero</string>
-    <string name="orient_gay">Gay</string>
-    <string name="orient_trans">Trans</string>
     <string name="next_video">Video berikutnya</string>
     <string name="previous_video">Video sebelumnya</string>
     <string name="nothing_here">Belum ada apa pun di sini. Tambahkan repositori sumber untuk mulai mencari.</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">Log pencarian disalin</string>
     <string name="trace_running">Mencari di %1$d sumber</string>
     <string name="health_skipped">tidak merespons, dilewati</string>
+    <string name="tor_off_only">Hanya berfungsi saat Tor mati</string>
     <string name="health_down">Tidak merespons. Matikan lalu nyalakan untuk mencoba lagi.</string>
     <string name="health_flaky">Bermasalah dalam pencarian terakhir</string>
     <string name="health_empty">Belum pernah memberi hasil</string>

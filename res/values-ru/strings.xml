@@ -99,10 +99,6 @@
     <string name="not_interested_done">Понятно. Похожие видео больше не будут предлагаться.</string>
     <string name="source_off">Отключить этот источник</string>
     <string name="source_off_done">Источник %1$s отключён. Его можно снова включить в фильтрах.</string>
-    <string name="filter_orientation">Ориентация</string>
-    <string name="orient_straight">Гетеро</string>
-    <string name="orient_gay">Гей</string>
-    <string name="orient_trans">Транс</string>
     <string name="next_video">Следующее видео</string>
     <string name="previous_video">Предыдущее видео</string>
     <string name="nothing_here">Здесь пока ничего нет. Добавьте репозиторий источников, чтобы начать поиск.</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">Журнал поиска скопирован</string>
     <string name="trace_running">Поиск в источниках: %1$d</string>
     <string name="health_skipped">не отвечает, пропущено</string>
+    <string name="tor_off_only">Работает только при выключенном Tor</string>
     <string name="health_down">Не отвечает. Выключите и включите, чтобы попробовать снова.</string>
     <string name="health_flaky">Были проблемы при последних поисках</string>
     <string name="health_empty">Пока не вернул ни одного результата</string>

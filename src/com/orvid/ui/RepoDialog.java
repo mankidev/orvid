@@ -98,6 +98,7 @@ final class RepoDialog {
         };
         for (String[] s : suggested) {
             if (Repos.installed(OrvidApp.get().extRoot(), s[1])) continue;
+            if (Repos.SECRET.equals(s[1]) && !com.orvid.search.Source.adultUnlocked) continue;
             TextView chip = new TextView(a);
             chip.setText(s[0]);
             chip.setTextColor(a.getColor(R.color.accent));

@@ -99,10 +99,6 @@
     <string name="not_interested_done">了解しました。このような動画は表示されなくなります。</string>
     <string name="source_off">このソースをオフにする</string>
     <string name="source_off_done">%1$s をオフにしました。フィルタから再びオンにできます。</string>
-    <string name="filter_orientation">指向</string>
-    <string name="orient_straight">ストレート</string>
-    <string name="orient_gay">ゲイ</string>
-    <string name="orient_trans">トランス</string>
     <string name="next_video">次の動画</string>
     <string name="previous_video">前の動画</string>
     <string name="nothing_here">まだ何もありません。検索を始めるにはソースのリポジトリを追加してください。</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">検索ログをコピーしました</string>
     <string name="trace_running">%1$d 個のソースを検索中</string>
     <string name="health_skipped">応答なし、スキップ</string>
+    <string name="tor_off_only">Tor がオフのときだけ使えます</string>
     <string name="health_down">応答がありません。オフにしてからオンにすると再試行します。</string>
     <string name="health_flaky">最近の検索で問題がありました</string>
     <string name="health_empty">まだ結果を返したことがありません</string>

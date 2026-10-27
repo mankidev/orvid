@@ -99,10 +99,6 @@
     <string name="not_interested_done">ठीक है। ऐसे वीडियो सुझाए नहीं जाएंगे।</string>
     <string name="source_off">यह स्रोत बंद करें</string>
     <string name="source_off_done">%1$s बंद कर दिया गया। फ़िल्टर में इसे फिर से चालू कर सकते हैं।</string>
-    <string name="filter_orientation">रुझान</string>
-    <string name="orient_straight">स्ट्रेट</string>
-    <string name="orient_gay">गे</string>
-    <string name="orient_trans">ट्रांस</string>
     <string name="next_video">अगला वीडियो</string>
     <string name="previous_video">पिछला वीडियो</string>
     <string name="nothing_here">यहाँ अभी कुछ नहीं है। खोज शुरू करने के लिए एक स्रोत रिपॉज़िटरी जोड़ें।</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">खोज लॉग कॉपी किया गया</string>
     <string name="trace_running">%1$d स्रोतों में खोज रहा है</string>
     <string name="health_skipped">जवाब नहीं दे रहा, छोड़ा गया</string>
+    <string name="tor_off_only">केवल Tor बंद होने पर काम करता है</string>
     <string name="health_down">जवाब नहीं दे रहा। दोबारा आज़माने के लिए बंद करके चालू करें।</string>
     <string name="health_flaky">हाल की खोजों में समस्या आई</string>
     <string name="health_empty">अब तक कोई नतीजा नहीं मिला</string>

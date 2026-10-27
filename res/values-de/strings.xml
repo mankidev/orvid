@@ -99,10 +99,6 @@
     <string name="not_interested_done">Verstanden. Videos wie dieses werden nicht mehr vorgeschlagen.</string>
     <string name="source_off">Diese Quelle ausschalten</string>
     <string name="source_off_done">%1$s ist ausgeschaltet. Du kannst sie in den Filtern wieder einschalten.</string>
-    <string name="filter_orientation">Orientierung</string>
-    <string name="orient_straight">Hetero</string>
-    <string name="orient_gay">Schwul</string>
-    <string name="orient_trans">Trans</string>
     <string name="next_video">Nächstes Video</string>
     <string name="previous_video">Vorheriges Video</string>
     <string name="nothing_here">Hier gibt es noch nichts. Füge ein Quellen-Repository hinzu, um zu suchen.</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">Suchprotokoll kopiert</string>
     <string name="trace_running">Durchsucht %1$d Quellen</string>
     <string name="health_skipped">antwortet nicht, übersprungen</string>
+    <string name="tor_off_only">Funktioniert nur, wenn Tor aus ist</string>
     <string name="health_down">Antwortet nicht. Zum erneuten Versuch aus- und einschalten.</string>
     <string name="health_flaky">Hatte bei den letzten Suchen Probleme</string>
     <string name="health_empty">Hat noch keine Ergebnisse geliefert</string>

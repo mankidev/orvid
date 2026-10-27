@@ -190,11 +190,13 @@ public final class Storyboard implements Frames {
         String sheetUrl = sheetUrl(sheet);
         Bitmap cached = sheet(sheetUrl);
         if (cached != null) {
-            callback.frame(crop(cached, index));
+            Bitmap frame = crop(cached, index);
+            if (frame != null) callback.frame(frame);
         } else {
             load(sheetUrl, () -> {
                 Bitmap bmp = sheet(sheetUrl);
-                if (bmp != null) callback.frame(crop(bmp, index));
+                Bitmap frame = bmp == null ? null : crop(bmp, index);
+                if (frame != null) callback.frame(frame);
             });
         }
     }
@@ -246,11 +248,12 @@ public final class Storyboard implements Frames {
     }
 
     private Bitmap crop(Bitmap sheet, int index) {
-        int w = Math.min(width, sheet.getWidth() / cols);
-        int h = Math.min(height, sheet.getHeight() / rows);
+        boolean full = width > 0 && height > 0 && sheet.getWidth() % width == 0 && sheet.getHeight() % height == 0;
+        int w = full ? width : sheet.getWidth() / cols;
+        int h = full ? height : Math.round(w / aspect());
         int x = (index % cols) * w;
         int y = (index / cols) * h;
-        if (x + w > sheet.getWidth() || y + h > sheet.getHeight()) return sheet;
+        if (w <= 0 || h <= 0 || x + w > sheet.getWidth() || y + h > sheet.getHeight()) return null;
         return Bitmap.createBitmap(sheet, x, y, w, h);
     }
 }

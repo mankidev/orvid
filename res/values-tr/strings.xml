@@ -101,10 +101,6 @@
     <string name="not_interested_done">Anlaşıldı. Bunun gibi videolar önerilmeyecek.</string>
     <string name="source_off">Bu kaynağı kapat</string>
     <string name="source_off_done">%1$s kapatıldı. Filtrelerden tekrar açabilirsin.</string>
-    <string name="filter_orientation">Yönelim</string>
-    <string name="orient_straight">Straight</string>
-    <string name="orient_gay">Gay</string>
-    <string name="orient_trans">Trans</string>
     <string name="next_video">Sonraki video</string>
     <string name="previous_video">Önceki video</string>
     <string name="nothing_here">Burada gösterilecek bir şey yok. Aramaya başlamak için bir kaynak deposu ekle.</string>
@@ -148,6 +144,7 @@
     <string name="trace_copied">Arama kaydı kopyalandı</string>
     <string name="trace_running">%1$d kaynakta aranıyor</string>
     <string name="health_skipped">yanıt vermiyor, atlandı</string>
+    <string name="tor_off_only">Sadece Tor kapalıyken çalışır</string>
     <string name="health_down">Yanıt vermiyor. Yeniden denemek için kapatıp açın.</string>
     <string name="health_flaky">Son aramalarda sorun çıkardı</string>
     <string name="health_empty">Henüz hiç sonuç vermedi</string>

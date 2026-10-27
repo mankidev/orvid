@@ -73,6 +73,8 @@ public final class ExtSource extends Source {
 
     int minQuery;
     boolean browse;
+    public boolean portal;
+    public boolean torless;
 
     @Override
     public boolean browses() {
@@ -83,6 +85,7 @@ public final class ExtSource extends Source {
     public boolean wanted(com.orvid.search.Filters f, com.orvid.search.Query q) {
         String typed = q.plainQuery == null ? "" : q.plainQuery.replace(" ", "");
         if (minQuery > 0 && !typed.isEmpty() && typed.length() < minQuery) return false;
+        if (torless && Fetch.torMode()) return false;
         return super.wanted(f, q);
     }
 
@@ -100,8 +103,14 @@ public final class ExtSource extends Source {
         return hedged();
     }
 
+    private static boolean playable(String url) {
+        if (!url.startsWith("http")) return false;
+        if (com.orvid.yt.Visionos.videoId(url) != null || Registry.forUrl(url) != null) return true;
+        return com.orvid.play.Resolve.preparable(url);
+    }
+
     public boolean handles(String url) {
-        return url != null && match.matcher(url).find();
+        return !portal && url != null && match.matcher(url).find();
     }
 
     @Override
@@ -122,7 +131,7 @@ public final class ExtSource extends Source {
         for (int i = 0; i < items.size(); i++) {
             JsonObject o = items.getObject(i);
             String url = o.getString("url", null);
-            if (url == null || !handles(url)) continue;
+            if (url == null || !(portal ? playable(url) : handles(url))) continue;
             p.items.add(item(o, url));
         }
         p.next = out.getString("next", null);

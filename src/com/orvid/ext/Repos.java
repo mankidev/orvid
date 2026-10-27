@@ -119,11 +119,27 @@ public final class Repos {
                 r.key = m.getString("key");
                 r.updated = m.getLong("updated", 0);
                 r.count = m.getInt("count", 0);
+                r.adult = m.has("adult") ? m.getBoolean("adult", false) : adultDir(d);
                 out.add(r);
             } catch (Exception ignored) {
             }
         }
         return out;
+    }
+
+    private static boolean adultDir(File dir) {
+        try {
+            JsonArray sources = JsonParser.object().from(Registry.read(new File(dir, "index.json"))).getArray("sources");
+            for (int i = 0; i < sources.size(); i++) {
+                try {
+                    if (JsonParser.object().from(Registry.read(new File(dir, safeName(sources.getString(i)))))
+                            .getBoolean("adult", false)) return true;
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     public static Repo add(File root, String input, String circuit) throws Exception {
@@ -144,7 +160,10 @@ public final class Repos {
     private static Repo install(File root, String base, String pinnedKey, String circuit) throws Exception {
         byte[] indexBytes = download(circuit, base + "index.json");
         Repo same = unchanged(root, base, pinnedKey, indexBytes);
-        if (same != null) return same;
+        if (same != null) {
+            fresh(same.id);
+            return same;
+        }
         byte[] sig = Base64.getDecoder().decode(new String(download(circuit, base + "index.sig"), StandardCharsets.US_ASCII).trim());
         JsonObject index = JsonParser.object().from(new String(indexBytes, StandardCharsets.UTF_8));
         String key = index.getString("key", "");
@@ -214,12 +233,39 @@ public final class Repos {
         meta.put("key", r.key);
         meta.put("updated", r.updated);
         meta.put("count", r.count);
+        meta.put("adult", r.adult);
         write(new File(staging, "meta.json"), JsonWriter.string(meta).getBytes(StandardCharsets.UTF_8));
         Registry.load(staging);
         delete(target);
         if (!staging.renameTo(target)) throw new IOException("cannot install");
         Registry.reload(root);
+        fresh(r.id);
         return r;
+    }
+
+    private static final java.util.Map<String, Long> CHECKED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<String, Boolean> STALE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long CHECK_EVERY_MS = 10 * 60 * 1000;
+
+    public static Boolean knownStale(Repo r) {
+        return STALE.get(r.id);
+    }
+
+    public static boolean stale(File root, Repo r, String circuit) throws Exception {
+        Long at = CHECKED.get(r.id);
+        Boolean known = STALE.get(r.id);
+        if (known != null && at != null && System.currentTimeMillis() - at < CHECK_EVERY_MS) return known;
+        byte[] remote = download(circuit, r.url + "index.json");
+        byte[] local = java.nio.file.Files.readAllBytes(new File(new File(root, r.id), "index.json").toPath());
+        boolean out = !java.util.Arrays.equals(local, remote);
+        STALE.put(r.id, out);
+        CHECKED.put(r.id, System.currentTimeMillis());
+        return out;
+    }
+
+    private static void fresh(String id) {
+        STALE.put(id, false);
+        CHECKED.put(id, System.currentTimeMillis());
     }
 
     private static Repo unchanged(File root, String base, String pinnedKey, byte[] indexBytes) {

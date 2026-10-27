@@ -101,7 +101,8 @@ public final class Registry {
         String name = d.getString("name", id);
         boolean adult = d.getBoolean("adult", false);
         double weight = Math.max(0.1, Math.min(1.0, d.getDouble("weight", 0.5)));
-        Pattern match = Pattern.compile(d.getString("match"));
+        boolean portal = d.getBoolean("portal", false);
+        Pattern match = Pattern.compile(portal ? d.getString("match", "(?!)") : d.getString("match"));
         int serviceId = 2000 + Math.floorMod((repo.getName() + "/" + id).hashCode(), 1_000_000);
         HtmlTube html = null;
         Script script = null;
@@ -145,6 +146,8 @@ public final class Registry {
         s.orientation = d.getString("orientation", null);
         s.minQuery = Math.max(0, Math.min(10, d.getInt("minQuery", 0)));
         s.browse = d.getBoolean("browse", false);
+        s.portal = portal;
+        s.torless = d.getBoolean("torless", false);
         return s;
     }
 

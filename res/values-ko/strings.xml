@@ -99,10 +99,6 @@
     <string name="not_interested_done">알겠습니다. 이런 동영상은 추천되지 않습니다.</string>
     <string name="source_off">이 소스 끄기</string>
     <string name="source_off_done">%1$s을(를) 껐습니다. 필터에서 다시 켤 수 있습니다.</string>
-    <string name="filter_orientation">성향</string>
-    <string name="orient_straight">이성애</string>
-    <string name="orient_gay">게이</string>
-    <string name="orient_trans">트랜스</string>
     <string name="next_video">다음 동영상</string>
     <string name="previous_video">이전 동영상</string>
     <string name="nothing_here">아직 표시할 내용이 없습니다. 검색하려면 소스 저장소를 추가하세요.</string>
@@ -146,6 +142,7 @@
     <string name="trace_copied">검색 기록을 복사했습니다</string>
     <string name="trace_running">소스 %1$d개 검색 중</string>
     <string name="health_skipped">응답 없음, 건너뜀</string>
+    <string name="tor_off_only">Tor가 꺼져 있을 때만 작동합니다</string>
     <string name="health_down">응답이 없습니다. 껐다가 켜면 다시 시도합니다.</string>
     <string name="health_flaky">최근 검색에서 문제가 있었습니다</string>
     <string name="health_empty">아직 결과를 반환한 적이 없습니다</string>
