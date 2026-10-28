@@ -1203,7 +1203,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         final com.orvid.search.Query q = com.orvid.search.Query.parse(title);
         final java.util.concurrent.Future<com.orvid.yt.Search.Page> text =
                 q.terms.isEmpty() || !relatedFilters().youtube || !com.orvid.ext.Registry.engineOn("youtube") ? null
-                        : RELATED_POOL.submit(() -> com.orvid.yt.Search.first(c0, relatedKeys(q, title), null));
+                        : RELATED_POOL.submit(() -> com.orvid.yt.Search.first(c0, relatedKeys(title), null));
         relatedPending++;
         new Job<List<StreamInfoItem>>(this) {
             @Override
@@ -1260,7 +1260,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
 
     private void loadRelatedAcross(String title, String channel, boolean adult, com.orvid.search.Source own,
                                    boolean skipYouTube) {
-        String keys = relatedKeys(com.orvid.search.Query.parse(title), title);
+        String keys = relatedKeys(title);
         if (keys.isEmpty()) return;
         final com.orvid.search.Filters filters = relatedFilters();
         relatedPending++;
@@ -1351,18 +1351,8 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         }.startBackground();
     }
 
-    private String relatedKeys(com.orvid.search.Query q, String title) {
-        List<String> keys = new ArrayList<>(com.orvid.search.Ranker.keyTerms(q.terms));
-        if (keys.isEmpty()) keys = q.terms;
-        if (seed != null && !seed.trim().isEmpty()) {
-            java.util.Set<String> wanted = new java.util.HashSet<>(com.orvid.search.Query.parse(seed).terms);
-            List<String> first = new ArrayList<>();
-            for (String k : keys) if (wanted.contains(k)) first.add(k);
-            for (String k : keys) if (!wanted.contains(k)) first.add(k);
-            keys = first;
-        }
-        if (keys.isEmpty()) return title.trim();
-        return String.join(" ", keys.subList(0, Math.min(5, keys.size())));
+    private String relatedKeys(String title) {
+        return com.orvid.search.Ranker.relatedQuery(title, seed);
     }
 
     private void loadRelatedElsewhere() {
@@ -1401,7 +1391,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                     }
                 }
                 relatedBasis = basis;
-                final String query = basis.isEmpty() ? channel.trim() : relatedKeys(com.orvid.search.Query.parse(basis), basis);
+                final String query = basis.isEmpty() ? channel.trim() : relatedKeys(basis);
                 if (query.isEmpty()) return same;
                 Diag.mark("related basis " + (basis.isEmpty() ? "channel" : "seed or tags"));
                 try {
@@ -1506,7 +1496,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     private void loadRelatedByText(String c0, String title, String channel) {
         com.orvid.search.Query q = com.orvid.search.Query.parse(title);
         if (q.terms.isEmpty() || !relatedFilters().youtube || !com.orvid.ext.Registry.engineOn("youtube")) return;
-        final String keys = relatedKeys(q, title);
+        final String keys = relatedKeys(title);
         final int minimum = related.getCount() < RELATED_MIN ? RELATED_MIN : 0;
         relatedPending++;
         new Job<List<StreamInfoItem>>(this) {

@@ -659,16 +659,33 @@ public final class MainActivity extends Activity implements Tor.Listener {
             }));
         }
         deferred.clear();
+        adultLater.clear();
         int[] waveCount = new int[2];
+        List<Queued> adult = new ArrayList<>();
         for (int i = 0; i < extras.size(); i++) {
             final Source src = extras.get(i);
             final int slot = i;
             if (blank && !src.browses() || !src.wanted(f, q) || healthSkip(generation, CORE + slot)) continue;
-            pendingSources++;
             Queued job = queued(CORE + slot, src.priority(q) + healthPenalty(src), -src.weight, () -> runExtra(generation, f, src, slot, null));
-            if (!Fetch.torMode() || waveCount[src.adult ? 1 : 0]++ < FIRST_WAVE) jobs.add(job);
+            if (src.adult) {
+                adult.add(job);
+                continue;
+            }
+            pendingSources++;
+            if (!Fetch.torMode() || waveCount[0]++ < FIRST_WAVE) jobs.add(job);
             else deferred.add(job);
         }
+        java.util.Collections.sort(adult);
+        for (int i = 0; i < adult.size(); i++) {
+            if (i >= ADULT_WAVE) {
+                adultLater.add(adult.get(i));
+                continue;
+            }
+            pendingSources++;
+            if (!Fetch.torMode() || waveCount[1]++ < FIRST_WAVE) jobs.add(adult.get(i));
+            else deferred.add(adult.get(i));
+        }
+        if (!adultLater.isEmpty()) Diag.mark("adult wave: " + (adult.size() - adultLater.size()) + " now, " + adultLater.size() + " on scroll");
         if (pendingSources == 0) {
             adapter.set(Collections.<StreamInfoItem>emptyList());
             showMessage(getString(blank ? R.string.browse_none : R.string.no_results));
@@ -713,6 +730,21 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private static final long SECOND_WAVE_CAP_MS = 3000;
     private static final long SECOND_WAVE_POLL_MS = 200;
     private final List<Queued> deferred = new ArrayList<>();
+    private static final int ADULT_WAVE = 20;
+    private final List<Queued> adultLater = new ArrayList<>();
+
+    private boolean releaseAdult() {
+        if (adultLater.isEmpty() || pendingSources > 0) return false;
+        int n = Math.min(ADULT_WAVE, adultLater.size());
+        List<Queued> go = new ArrayList<>(adultLater.subList(0, n));
+        adultLater.subList(0, n).clear();
+        pendingSources += n;
+        startedSources += n;
+        searchLogged = false;
+        Diag.mark("adult wave: " + n + " more, " + adultLater.size() + " left");
+        for (Queued job : go) SEARCH.execute(job);
+        return true;
+    }
 
     private void releaseDeferred() {
         if (deferred.isEmpty()) return;
@@ -798,27 +830,25 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private volatile Query extraQuery;
     private Query[] extraStarted = new Query[0];
     private static final int SEARCH_SLOTS = 16;
-    private static final java.util.concurrent.ThreadPoolExecutor SEARCH = new java.util.concurrent.ThreadPoolExecutor(
-            SEARCH_SLOTS, SEARCH_SLOTS, 30, java.util.concurrent.TimeUnit.SECONDS,
-            new java.util.concurrent.PriorityBlockingQueue<Runnable>());
+    private static volatile java.util.concurrent.ThreadPoolExecutor SEARCH = searchPool(SEARCH_SLOTS);
     private static final java.util.concurrent.atomic.AtomicLong ORDER = new java.util.concurrent.atomic.AtomicLong();
 
     private static final int SEARCH_SLOTS_DIRECT = 32;
 
-    static {
-        SEARCH.allowCoreThreadTimeOut(true);
+    private static java.util.concurrent.ThreadPoolExecutor searchPool(int slots) {
+        java.util.concurrent.ThreadPoolExecutor pool = new java.util.concurrent.ThreadPoolExecutor(
+                slots, slots, 30, java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.PriorityBlockingQueue<Runnable>());
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
     }
 
     private static void sizeSearchPool() {
         int slots = Fetch.torMode() ? SEARCH_SLOTS : SEARCH_SLOTS_DIRECT;
-        if (SEARCH.getCorePoolSize() == slots) return;
-        if (slots > SEARCH.getMaximumPoolSize()) {
-            SEARCH.setMaximumPoolSize(slots);
-            SEARCH.setCorePoolSize(slots);
-        } else {
-            SEARCH.setCorePoolSize(slots);
-            SEARCH.setMaximumPoolSize(slots);
-        }
+        java.util.concurrent.ThreadPoolExecutor old = SEARCH;
+        if (old.getActiveCount() == 0 && old.getCorePoolSize() == slots) return;
+        old.shutdown();
+        SEARCH = searchPool(slots);
     }
 
     private static final class Queued implements Runnable, Comparable<Queued> {
@@ -1474,6 +1504,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     private void loadMore() {
         if (loadingMore || !searched || query == null) return;
+        if (releaseAdult()) return;
         final String token = noMore[0] ? null : continuation;
         final boolean wantDm = dmMore && !noMore[1];
         final String wantVk = noMore[2] ? null : vkNext;
@@ -1812,6 +1843,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     private void goHome() {
         if (searchScope != null) searchScope.cancel();
+        adultLater.clear();
         if (running != null) running.cancel();
         running = null;
         searched = false;
@@ -1835,8 +1867,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
             goHome();
             return;
         }
-        finishAndRemoveTask();
-        com.orvid.app.OrvidApp.get().wipeAndExit();
+        moveTaskToBack(true);
     }
 
     private android.view.ScaleGestureDetector pinch;

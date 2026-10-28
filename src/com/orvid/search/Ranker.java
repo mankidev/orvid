@@ -546,6 +546,45 @@ public final class Ranker {
         return out;
     }
 
+    static java.util.Map<String, String> numbered(List<String> words) {
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        for (int i = 1; i < words.size(); i++) {
+            String n = words.get(i);
+            String w = words.get(i - 1);
+            if (n.length() > 3 || !n.chars().allMatch(Character::isDigit)) continue;
+            if (w.length() < 3 || w.chars().anyMatch(Character::isDigit) || TITLE_NOISE.contains(w) || Query.isStop(w)) continue;
+            out.putIfAbsent(w, n);
+        }
+        return out;
+    }
+
+    private static String numberFor(java.util.Map<String, String> numbers, String word) {
+        for (java.util.Map.Entry<String, String> e : numbers.entrySet()) if (sameWord(word, e.getKey())) return e.getValue();
+        return null;
+    }
+
+    public static String relatedQuery(String title, String seed) {
+        Query q = Query.parse(title);
+        List<String> keys = new ArrayList<>(keyTerms(q.terms));
+        if (keys.isEmpty()) keys = q.terms;
+        if (seed != null && !seed.trim().isEmpty()) {
+            java.util.Set<String> wanted = new java.util.HashSet<>(Query.parse(seed).terms);
+            List<String> first = new ArrayList<>();
+            for (String k : keys) if (wanted.contains(k)) first.add(k);
+            for (String k : keys) if (!wanted.contains(k)) first.add(k);
+            keys = first;
+        }
+        if (keys.isEmpty()) return title.trim();
+        java.util.Map<String, String> numbers = numbered(Query.words(Query.fold(title)));
+        List<String> out = new ArrayList<>();
+        for (String k : keys.subList(0, Math.min(5, keys.size()))) {
+            out.add(k);
+            String n = numberFor(numbers, k);
+            if (n != null) out.add(n);
+        }
+        return String.join(" ", out);
+    }
+
     private static final java.util.Set<String> ENDINGS = new java.util.HashSet<>(java.util.Arrays.asList(
             "s", "es", "ler", "lar", "in", "nin", "un", "nun", "i", "u", "e", "a", "de", "da"));
 
@@ -555,6 +594,9 @@ public final class Ranker {
         String shorter = longer == word ? term : word;
         return shorter.length() >= 4 && longer.startsWith(shorter) && ENDINGS.contains(longer.substring(shorter.length()));
     }
+
+    private static final double NUMBER_MATCH = 3;
+    private static final double NUMBER_CLASH = 6;
 
     public static List<StreamInfoItem> similar(String title, String channel, String selfUrl,
                                                List<StreamInfoItem> next, List<StreamInfoItem> search) {
@@ -572,6 +614,7 @@ public final class Ranker {
                                                boolean trustNext, int minimum) {
         List<String> keys = keyTerms(Query.parse(title).terms);
         int needed = keys.size() >= 3 ? 2 : 1;
+        java.util.Map<String, String> numbers = numbered(Query.words(Query.fold(title)));
         String ownChannel = channelNamed(channel, title) ? Query.fold(channel) : "";
         List<Scored> all = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
@@ -603,6 +646,14 @@ public final class Ranker {
                     continue;
                 }
                 double s = overlap * 3 + (sameChannel ? 4 : 0) + 4.0 * weights[src] / (1 + rank * 0.3);
+                if (!numbers.isEmpty()) {
+                    java.util.Map<String, String> theirs = numbered(words);
+                    for (java.util.Map.Entry<String, String> e : numbers.entrySet()) {
+                        String n = numberFor(theirs, e.getKey());
+                        if (n == null) continue;
+                        s += n.equals(e.getValue()) ? NUMBER_MATCH : -NUMBER_CLASH;
+                    }
+                }
                 long views = item.getViewCount();
                 if (views > 0) s += Math.log10(views + 1) * 0.25;
                 all.add(new Scored(item, s, order++));

@@ -377,11 +377,23 @@ public final class Fetch extends Downloader {
                 c.getURL().toString());
     }
 
+    static String ascii(String url) {
+        int i = 0;
+        while (i < url.length() && url.charAt(i) < 128) i++;
+        if (i == url.length()) return url;
+        StringBuilder b = new StringBuilder(url.length() * 2).append(url, 0, i);
+        for (byte x : url.substring(i).getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+            if (x >= 0) b.append((char) x);
+            else b.append('%').append(Character.toUpperCase(Character.forDigit((x >> 4) & 15, 16))).append(Character.toUpperCase(Character.forDigit(x & 15, 16)));
+        }
+        return b.toString();
+    }
+
     public static HttpURLConnection open(String url) throws IOException {
         Scope scope = SCOPE.get();
         if (scope != null && scope.cancelled()) throw new Cancelled();
         Focus.await(scope);
-        URL target = new URL(url);
+        URL target = new URL(ascii(url));
         HttpURLConnection c = (HttpURLConnection) target.openConnection(route(target.getHost()));
         if (scope != null) scope.add(c);
         c.setConnectTimeout(TIMEOUT_MS);
