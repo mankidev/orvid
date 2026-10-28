@@ -226,9 +226,8 @@ public final class MainActivity extends Activity implements Tor.Listener {
             @Override
             public void onScrollStateChanged(AbsListView view, int scrollState) {
                 adapter.setIdle(scrollState == SCROLL_STATE_IDLE);
-                list.removeCallbacks(prepareVisible);
-                list.removeCallbacks(prepareLater);
-                prepareWaitStarted = 0;
+                if (scrollState != SCROLL_STATE_IDLE) settleUntil = 0;
+                stopPrepare();
                 if (scrollState == SCROLL_STATE_IDLE) list.postDelayed(prepareVisible, PREPARE_IDLE_MS);
             }
 
@@ -531,9 +530,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         loadingMore = false;
         correctedQuery = null;
         lastSourceError = null;
-        if (flush != null) list.removeCallbacks(flush);
-        flush = null;
-        graceOver = false;
+        settleUntil = 0;
         if (rankTask != null) list.removeCallbacks(rankTask);
         rankTask = null;
         rankDirty = false;
@@ -584,10 +581,8 @@ public final class MainActivity extends Activity implements Tor.Listener {
         List<Queued> jobs = new ArrayList<>();
 
         final java.util.concurrent.Future<Hedge.Result<Search.Page>> guessed = takeGuess(q, f);
-        youtubePending = false;
         final boolean blank = input.trim().isEmpty();
         if (!blank && q.siteIs("youtube", "YouTube") && f.youtube && com.orvid.ext.Registry.engineOn("youtube")) {
-            youtubePending = true;
             pendingSources++;
             jobs.add(queued(0, 0, 0, () -> {
                 try {
@@ -669,7 +664,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
             showMessage(getString(blank ? R.string.browse_none : R.string.no_results));
         }
         startedSources = pendingSources;
-        firstWave = jobs.size();
         java.util.Collections.sort(jobs);
         for (Queued job : jobs) SEARCH.execute(job);
         if (fromMemory) scheduleSecondWave(generation);
@@ -687,7 +681,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private String rememberKey;
     private boolean fromMemory;
     private int startedSources;
-    private int firstWave;
     private int failedSources;
 
     private static final class Remembered {
@@ -1187,18 +1180,14 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private static final long VK_HEDGE_MS = 2500;
     private static final long EXTRA_HEDGE_MS = 0;
 
-    private static final long GRACE_MS = 2000;
-    private static final long YOUTUBE_WAIT_MS = 6000;
-    private boolean youtubePending;
+    private static final long SETTLE_MS = 1500;
+    private long settleUntil;
     private List<List<StreamInfoItem>> arrived;
     private boolean shown;
     private boolean scrolledAway;
-    private Runnable flush;
-    private boolean graceOver;
 
     private void deliver(int generation, Query q, Filters f, int source, List<StreamInfoItem> items) {
         if (generation != searchGeneration) return;
-        if (source == 0) youtubePending = false;
         Diag.mark("src " + traceName(source) + " " + items.size() + " items");
         devStatus(source, items.size() + " " + (android.os.SystemClock.uptimeMillis() - searchStarted) / 100 / 10.0 + "s");
         traceSet(generation, source, getString(R.string.trace_results, items.size()), true);
@@ -1213,24 +1202,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         for (StreamInfoItem i : merged) have.add(i.getUrl());
         for (StreamInfoItem i : items) if (have.add(i.getUrl())) merged.add(i);
         arrived.set(source, merged);
-        if (!shown) {
-            if (pendingSources <= 0 || graceOver || (startedSources - pendingSources) * 2 >= firstWave) {
-                if (flush != null) list.removeCallbacks(flush);
-                flush = null;
-                requestRank(generation, true);
-            } else if (flush == null) {
-                flush = () -> {
-                    flush = null;
-                    graceOver = true;
-                    requestRank(generation, true);
-                };
-                long waitYouTube = youtubePending
-                        ? searchStarted + YOUTUBE_WAIT_MS - android.os.SystemClock.uptimeMillis() : 0;
-                list.postDelayed(flush, Math.max(GRACE_MS, waitYouTube));
-            }
-        } else {
-            requestRank(generation, false);
-        }
+        requestRank(generation, !shown || settling());
         finishIfDone();
     }
 
@@ -1293,23 +1265,40 @@ public final class MainActivity extends Activity implements Tor.Listener {
     }
 
 
+    private boolean settling() {
+        return shown && !scrolledAway && android.os.SystemClock.uptimeMillis() < settleUntil;
+    }
+
     private void applyRanked(List<StreamInfoItem> ranked) {
-        if (shown) {
+        if (shown && !settling()) {
             mergeTail(ranked);
             return;
         }
         if (ranked.isEmpty() && pendingSources > 0) return;
+        if (shown) {
+            Diag.mark("settle " + ranked.size() + " items");
+            adapter.set(ranked);
+            com.orvid.play.Session.lastSearch = new ArrayList<>(ranked);
+            stopPrepare();
+            list.postDelayed(prepareVisible, PREPARE_IDLE_MS);
+            return;
+        }
         shown = true;
+        settleUntil = android.os.SystemClock.uptimeMillis() + SETTLE_MS;
         Diag.mark("first paint " + ranked.size() + " items");
         saveSearchLog();
         scheduleSecondWave(searchGeneration);
         adapter.set(ranked);
         com.orvid.play.Session.lastSearch = new ArrayList<>(ranked);
         list.setSelection(0);
+        stopPrepare();
+        list.postDelayed(prepareVisible, PREPARE_IDLE_MS);
+    }
+
+    private void stopPrepare() {
         list.removeCallbacks(prepareVisible);
         list.removeCallbacks(prepareLater);
         prepareWaitStarted = 0;
-        list.postDelayed(prepareVisible, PREPARE_IDLE_MS);
     }
 
 
@@ -1412,14 +1401,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
         pendingSources--;
         lastSourceError = e;
         if (e != null && !(e instanceof Fetch.Cancelled)) failedSources++;
-        if (source == 0) {
-            youtubePending = false;
-            if (!shown && flush != null) {
-                list.removeCallbacks(flush);
-                flush.run();
-                return;
-            }
-        }
         finishIfDone();
     }
 
@@ -1450,8 +1431,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
         if (!deferred.isEmpty() && pendingSources <= deferred.size()) releaseDeferred();
         if (pendingSources <= 0) judgeHealth();
         if (pendingSources <= 0 && !shown && arrived != null && query != null && !rankBusy) {
-            if (flush != null) list.removeCallbacks(flush);
-            flush = null;
             requestRank(searchGeneration, true);
             return;
         }

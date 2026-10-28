@@ -25,14 +25,21 @@ import com.orvid.net.Fetch;
 final class RepoDialog {
 
     private interface Install {
-        Repos.Repo run() throws Exception;
+        Repos.Repo run(Repos.Progress progress) throws Exception;
     }
 
     private final Activity a;
     private final Dialog dialog;
     private final LinearLayout column;
     private final TextView status;
-    private final ProgressBar spinner;
+    private final LinearLayout track;
+    private final android.widget.ImageView logo;
+    private final ProgressBar bar;
+    private final java.util.concurrent.ConcurrentLinkedQueue<android.graphics.Bitmap> logos = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private android.animation.ObjectAnimator filling;
+    private Runnable finish;
+    private int aim;
+    private boolean ticking;
     private boolean busy;
 
     private RepoDialog(Activity a, String title) {
@@ -54,9 +61,17 @@ final class RepoDialog {
         status.setTextColor(a.getColor(R.color.text_secondary));
         status.setTextSize(13);
         status.setVisibility(View.GONE);
-        spinner = new ProgressBar(a, null, android.R.attr.progressBarStyleSmall);
-        spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(a.getColor(R.color.accent)));
-        spinner.setVisibility(View.GONE);
+        track = new LinearLayout(a);
+        track.setOrientation(LinearLayout.HORIZONTAL);
+        track.setGravity(Gravity.CENTER_VERTICAL);
+        track.setVisibility(View.GONE);
+        logo = new android.widget.ImageView(a);
+        logo.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        bar = new ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setIndeterminate(false);
+        bar.setMax(1000);
+        bar.setProgressTintList(android.content.res.ColorStateList.valueOf(a.getColor(R.color.accent)));
+        bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(a.getColor(R.color.text_secondary)));
         dialog.setContentView(column);
         dialog.setCanceledOnTouchOutside(true);
     }
@@ -93,8 +108,9 @@ final class RepoDialog {
         chips.setOrientation(LinearLayout.HORIZONTAL);
         String[][] suggested = {
                 {a.getString(R.string.repo_official), Repos.OFFICIAL},
-                {"Orvid films", Repos.FILMS},
                 {"Orvid secret (18+)", Repos.SECRET},
+                {"Orvid films", Repos.FILMS},
+                {"Orvid search", Repos.SEARCH},
         };
         for (String[] s : suggested) {
             if (Repos.installed(OrvidApp.get().extRoot(), s[1])) continue;
@@ -119,13 +135,16 @@ final class RepoDialog {
             LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
             rowLp.topMargin = Ui.dp(a, 10);
-            d.column.addView(chips, rowLp);
+            android.widget.HorizontalScrollView scroller = new android.widget.HorizontalScrollView(a);
+            scroller.setHorizontalScrollBarEnabled(false);
+            scroller.addView(chips);
+            d.column.addView(scroller, rowLp);
         }
         d.addStatus();
         Runnable submit = () -> {
             String url = field.getText().toString().trim();
             if (url.isEmpty() || d.busy) return;
-            d.run(() -> Repos.add(OrvidApp.get().extRoot(), url, Fetch.newCircuit("repo")), done);
+            d.run(p -> Repos.add(OrvidApp.get().extRoot(), url, Fetch.newCircuit("repo"), p), done);
         };
         field.setOnEditorActionListener((v, id, e) -> {
             submit.run();
@@ -160,11 +179,11 @@ final class RepoDialog {
                 d.column.addView(t);
                 header = true;
             }
-            d.column.addView(d.linkRow(l, () -> d.run(() -> Repos.add(OrvidApp.get().extRoot(), l.url, Fetch.newCircuit("repo")), done)));
+            d.column.addView(d.linkRow(l, () -> d.run(p -> Repos.add(OrvidApp.get().extRoot(), l.url, Fetch.newCircuit("repo"), p), done)));
         }
         d.addStatus();
         d.buttons(a.getString(R.string.repo_update),
-                () -> d.run(() -> Repos.update(OrvidApp.get().extRoot(), r, Fetch.newCircuit("repo")), done),
+                () -> d.run(p -> Repos.update(OrvidApp.get().extRoot(), r, Fetch.newCircuit("repo"), p), done),
                 a.getString(R.string.repo_remove), () -> {
                     if (d.busy) return;
                     Repos.remove(OrvidApp.get().extRoot(), r.id);
@@ -198,13 +217,17 @@ final class RepoDialog {
     }
 
     private void addStatus() {
+        int size = Ui.dp(a, 28);
+        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(size, size);
+        logoLp.setMarginEnd(Ui.dp(a, 12));
+        track.addView(logo, logoLp);
+        track.addView(bar, new LinearLayout.LayoutParams(0, Ui.dp(a, 6), 1));
+        track.setPadding(0, Ui.dp(a, 14), 0, 0);
+        column.addView(track);
         LinearLayout line = new LinearLayout(a);
         line.setOrientation(LinearLayout.HORIZONTAL);
         line.setGravity(Gravity.CENTER_VERTICAL);
         line.setPadding(0, Ui.dp(a, 10), 0, 0);
-        LinearLayout.LayoutParams spinLp = new LinearLayout.LayoutParams(Ui.dp(a, 16), Ui.dp(a, 16));
-        spinLp.setMarginEnd(Ui.dp(a, 8));
-        line.addView(spinner, spinLp);
         line.addView(status, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         column.addView(line);
     }
@@ -255,39 +278,119 @@ final class RepoDialog {
         return b;
     }
 
-    private void say(String text, boolean working) {
+    private void say(String text) {
         status.setText(text);
         status.setVisibility(View.VISIBLE);
-        spinner.setVisibility(working ? View.VISIBLE : View.GONE);
     }
 
     private void run(Install work, Runnable done) {
         if (busy) return;
         busy = true;
-        say(a.getString(R.string.repo_adding), true);
+        say(a.getString(R.string.repo_adding));
+        logos.clear();
+        finish = null;
+        logo.setImageDrawable(null);
+        bar.setProgress(0);
+        aim = 0;
+        track.setVisibility(View.VISIBLE);
+        int px = Ui.dp(a, 28);
+        Repos.Progress progress = (count, total, icon) -> {
+            if (icon != null) {
+                android.graphics.Bitmap b = android.graphics.BitmapFactory.decodeFile(icon.getAbsolutePath());
+                if (b != null) {
+                    android.graphics.Bitmap scaled = android.graphics.Bitmap.createScaledBitmap(b, px, px, true);
+                    if (scaled != b) b.recycle();
+                    logos.add(scaled);
+                }
+            }
+            column.post(() -> fill(total == 0 ? 1f : count / (float) total));
+        };
+        startTicking();
         new Job<Repos.Repo>(a) {
             @Override
             protected Repos.Repo load() throws Exception {
-                return work.run();
+                return work.run(progress);
             }
 
             @Override
             protected void show(Repos.Repo r) {
-                busy = false;
-                if (r.adult && !com.orvid.search.Source.adultUnlocked) {
-                    explainHidden(done);
-                    return;
+                fill(1f);
+                finish = () -> {
+                    busy = false;
+                    if (r.adult && !com.orvid.search.Source.adultUnlocked) {
+                        explainHidden(done);
+                        return;
+                    }
+                    dialog.dismiss();
+                    done.run();
+                };
+                if (!dialog.isShowing()) {
+                    Runnable f = finish;
+                    finish = null;
+                    f.run();
                 }
-                dialog.dismiss();
-                done.run();
             }
 
             @Override
             protected void fail(Exception error) {
                 busy = false;
-                say(a.getString(R.string.repo_failed, String.valueOf(error.getMessage())), false);
+                ticking = false;
+                logos.clear();
+                track.setVisibility(View.GONE);
+                say(a.getString(R.string.repo_failed, String.valueOf(error.getMessage())));
             }
         }.start();
+    }
+
+    private void fill(float fraction) {
+        int target = Math.round(Math.min(1f, fraction) * bar.getMax());
+        if (target <= aim) return;
+        aim = target;
+        if (filling != null) filling.cancel();
+        filling = android.animation.ObjectAnimator.ofInt(bar, "progress", bar.getProgress(), target);
+        filling.setDuration(260);
+        filling.setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f));
+        filling.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                if (filling == animation) filling = null;
+            }
+        });
+        filling.start();
+    }
+
+    private void startTicking() {
+        if (ticking) return;
+        ticking = true;
+        column.post(new Runnable() {
+            @Override
+            public void run() {
+                if (!ticking) return;
+                if (!dialog.isShowing()) {
+                    ticking = false;
+                    return;
+                }
+                android.graphics.Bitmap next = logos.poll();
+                if (next != null) {
+                    logo.setImageBitmap(next);
+                    logo.setAlpha(0f);
+                    logo.setScaleX(0.7f);
+                    logo.setScaleY(0.7f);
+                    logo.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(140)
+                            .setInterpolator(new android.view.animation.OvershootInterpolator(1.4f)).start();
+                }
+                if (finish != null && logos.isEmpty() && filling == null) {
+                    ticking = false;
+                    Runnable f = finish;
+                    finish = null;
+                    column.postDelayed(f, 180);
+                    return;
+                }
+                int backlog = logos.size();
+                long wait = finish != null ? Math.max(16, 500 / Math.max(1, backlog)) : backlog > 8 ? 40 : 90;
+                column.postDelayed(this, wait);
+            }
+        });
     }
 
     private void explainHidden(Runnable done) {

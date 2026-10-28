@@ -41,9 +41,14 @@ public final class Repos {
         public boolean adult;
     }
 
+    public interface Progress {
+        void step(int done, int total, File icon);
+    }
+
     public static final String OFFICIAL = "https://raw.githubusercontent.com/mankidev/orvid-sources/main/";
     public static final String SECRET = "https://raw.githubusercontent.com/mankidev/orvid-sources-secret/main/";
     public static final String FILMS = "https://raw.githubusercontent.com/mankidev/orvid-films/main/";
+    public static final String SEARCH = "https://raw.githubusercontent.com/mankidev/orvid-search/main/";
 
     public static boolean installed(File root, String url) {
         String wanted = canonical(normalize(url));
@@ -142,12 +147,19 @@ public final class Repos {
         return false;
     }
 
-    public static Repo add(File root, String input, String circuit) throws Exception {
-        return install(root, normalize(input), null, circuit);
+    public static Repo add(File root, String input, String circuit, Progress progress) throws Exception {
+        return install(root, normalize(input), null, circuit, progress);
     }
 
-    public static Repo update(File root, Repo repo, String circuit) throws Exception {
-        return install(root, repo.url, repo.key, circuit);
+    public static Repo update(File root, Repo repo, String circuit, Progress progress) throws Exception {
+        return install(root, repo.url, repo.key, circuit, progress);
+    }
+
+    private static void tick(Progress progress, java.util.concurrent.atomic.AtomicInteger finished, int total, File file) {
+        if (progress == null) return;
+        String name = file.getName();
+        boolean icon = name.endsWith(".png") || name.endsWith(".webp");
+        progress.step(finished.incrementAndGet(), total, icon && file.isFile() ? file : null);
     }
 
     public static void remove(File root, String id) {
@@ -157,10 +169,16 @@ public final class Repos {
         Registry.reload(root);
     }
 
-    private static Repo install(File root, String base, String pinnedKey, String circuit) throws Exception {
+    private static Repo install(File root, String base, String pinnedKey, String circuit, Progress progress) throws Exception {
         byte[] indexBytes = download(circuit, base + "index.json");
         Repo same = unchanged(root, base, pinnedKey, indexBytes);
         if (same != null) {
+            if (progress != null) {
+                java.util.Set<String> names = JsonParser.object().from(new String(indexBytes, StandardCharsets.UTF_8))
+                        .getObject("files").keySet();
+                java.util.concurrent.atomic.AtomicInteger finished = new java.util.concurrent.atomic.AtomicInteger();
+                for (String name : names) tick(progress, finished, names.size(), new File(new File(root, same.id), safeName(name)));
+            }
             fresh(same.id);
             return same;
         }
@@ -180,6 +198,8 @@ public final class Repos {
         delete(staging);
         if (!staging.mkdirs()) throw new IOException("cannot write");
         JsonObject files = index.getObject("files");
+        int total = files.size();
+        java.util.concurrent.atomic.AtomicInteger finished = new java.util.concurrent.atomic.AtomicInteger();
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(PARALLEL);
         try {
             List<java.util.concurrent.Future<Void>> jobs = new ArrayList<>();
@@ -191,6 +211,7 @@ public final class Repos {
                     byte[] body = java.nio.file.Files.readAllBytes(old.toPath());
                     if (hex(sha256(body)).equalsIgnoreCase(expected)) {
                         write(new File(staging, safe), body);
+                        tick(progress, finished, total, new File(staging, safe));
                         continue;
                     }
                 }
@@ -198,6 +219,7 @@ public final class Repos {
                     byte[] body = download(circuit, base + safe);
                     if (!hex(sha256(body)).equalsIgnoreCase(expected)) throw new IOException("checksum mismatch " + safe);
                     write(new File(staging, safe), body);
+                    tick(progress, finished, total, new File(staging, safe));
                     return null;
                 }));
             }

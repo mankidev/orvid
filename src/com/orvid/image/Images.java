@@ -180,6 +180,7 @@ public final class Images {
                 deliver(key, bitmap);
                 if (visible) com.orvid.net.Diag.mark("thumb " + (bytes.length / 1024) + "KB "
                         + (android.os.SystemClock.uptimeMillis() - began) + "ms");
+                ThumbPrint.record(page, bytes);
             } finally {
                 waiting.remove(key);
                 if (visible) visibleLoads.decrementAndGet();
@@ -283,7 +284,7 @@ public final class Images {
         if (!ahead.add(wanted)) return;
         aheadPool.execute(new Job(AHEAD, () -> {
             try {
-                obtain(wanted, owner, targetWidth);
+                ThumbPrint.record(page, obtain(wanted, owner, targetWidth));
             } finally {
                 ahead.remove(wanted);
             }

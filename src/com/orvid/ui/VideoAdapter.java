@@ -156,6 +156,75 @@ final class VideoAdapter extends BaseAdapter {
         this.mode = mode;
         this.onPick = onPick;
         screenWidth = context.getResources().getDisplayMetrics().widthPixels;
+        com.orvid.image.ThumbPrint.listen(onPrint);
+    }
+
+    private final com.orvid.image.ThumbPrint.Listener onPrint = this::printed;
+
+    private void printed(String page) {
+        if (skeletons > 0) return;
+        for (int i = 0; i < items.size(); i++) {
+            StreamInfoItem item = items.get(i);
+            if (!page.equals(item.getUrl())) continue;
+            boolean dropped = false;
+            while (i < items.size() && items.get(i) == item && dropCopies(i)) dropped = true;
+            if (dropped) notifyDataSetChanged();
+            return;
+        }
+    }
+
+    private void sweepCopies(java.util.Set<StreamInfoItem> fresh) {
+        int n = items.size();
+        long[] prints = new long[n];
+        boolean[] has = new boolean[n];
+        boolean[] gone = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            Long print = com.orvid.image.ThumbPrint.of(items.get(i).getUrl());
+            if (print == null) continue;
+            prints[i] = print;
+            has[i] = true;
+        }
+        boolean dropped = false;
+        for (int i = 0; i < n; i++) {
+            if (!has[i] || gone[i] || !fresh.contains(items.get(i))) continue;
+            for (int j = 0; j < n && !gone[i]; j++) {
+                if (j == i || !has[j] || gone[j]) continue;
+                if (!copies(items.get(i), prints[i], items.get(j), prints[j])) continue;
+                gone[Math.max(i, j)] = true;
+                dropped = true;
+            }
+        }
+        if (!dropped) return;
+        for (int i = n - 1; i >= 0; i--) {
+            if (gone[i]) tail.remove(items.remove(i));
+        }
+    }
+
+    private static java.util.Set<StreamInfoItem> identities() {
+        return java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    }
+
+    private boolean dropCopies(int index) {
+        StreamInfoItem item = items.get(index);
+        Long print = com.orvid.image.ThumbPrint.of(item.getUrl());
+        if (print == null) return false;
+        for (int j = 0; j < items.size(); j++) {
+            if (j == index) continue;
+            StreamInfoItem other = items.get(j);
+            Long theirs = com.orvid.image.ThumbPrint.of(other.getUrl());
+            if (theirs == null || !copies(item, print, other, theirs)) continue;
+            StreamInfoItem gone = items.remove(Math.max(index, j));
+            tail.remove(gone);
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean copies(StreamInfoItem a, long pa, StreamInfoItem b, long pb) {
+        if (!com.orvid.image.ThumbPrint.same(pa, pb)) return false;
+        long x = a.getDuration();
+        long y = b.getDuration();
+        return x > 0 && y > 0 && Math.abs(x - y) <= 2;
     }
 
     void setMode(int mode) {
@@ -190,11 +259,15 @@ final class VideoAdapter extends BaseAdapter {
     }
 
     void set(List<StreamInfoItem> next) {
+        java.util.Set<StreamInfoItem> fresh = identities();
+        fresh.addAll(next);
+        if (skeletons == 0) fresh.removeAll(items);
         skeletons = 0;
         items.clear();
         items.addAll(next);
         tail.clear();
         tail.addAll(next.subList(com.orvid.search.Ranker.Ranked.strict(next), next.size()));
+        sweepCopies(fresh);
         notifyDataSetChanged();
         if (next.isEmpty()) prefetchFrom = 0;
         prefetch();
@@ -329,6 +402,7 @@ final class VideoAdapter extends BaseAdapter {
         at = Math.max(at, Math.min(frozen, items.size()));
         int strict = com.orvid.search.Ranker.Ranked.strict(more);
         int added = 0;
+        java.util.Set<StreamInfoItem> fresh = identities();
         for (int i = 0; i < more.size(); i++) {
             StreamInfoItem item = more.get(i);
             if (!seen.add(key(item))) continue;
@@ -338,8 +412,10 @@ final class VideoAdapter extends BaseAdapter {
                 items.add(item);
                 tail.add(item);
             }
+            fresh.add(item);
             added++;
         }
+        sweepCopies(fresh);
         notifyDataSetChanged();
         prefetch();
         return added;
