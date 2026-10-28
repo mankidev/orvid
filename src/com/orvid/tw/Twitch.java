@@ -65,35 +65,80 @@ public final class Twitch {
 
     private static final long MAX_LENGTH_SECONDS = 3 * 3600;
 
+    private static final Pattern LOGIN = Pattern.compile("@?([A-Za-z0-9_]{4,25})");
+    private static final int CHANNEL_CLIPS = 12;
+    private static final int CHANNEL_VIDEOS = 12;
+
     public static Page search(String circuit, String query, String cursor) throws IOException {
         String target = cursor == null ? "{index: VOD}" : "{index: VOD, cursor: " + q(cursor) + "}";
+        Matcher login = LOGIN.matcher(query.trim());
+        boolean channel = cursor == null && login.matches();
+        String user = !channel ? "" : " user(login: " + q(login.group(1).toLowerCase(java.util.Locale.ROOT)) + ") {"
+                + " displayName clips(first: " + CHANNEL_CLIPS + ", criteria: {period: ALL_TIME}) { edges { node { slug title"
+                + " durationSeconds viewCount createdAt thumbnailURL } } }"
+                + " videos(first: " + CHANNEL_VIDEOS + ", sort: TIME) { edges { node { id title lengthSeconds viewCount"
+                + " createdAt previewThumbnailURL(width: 640, height: 360) } } } }";
         JsonObject data = gql(circuit, "query { searchFor(userQuery: " + q(query)
                 + ", platform: \"web\", options: {targets: [" + target + "]}) { videos { cursor items { id title"
                 + " lengthSeconds viewCount createdAt previewThumbnailURL(width: 640, height: 360)"
-                + " owner { displayName } } } } }", "twitch search");
-        JsonObject videos = data.getObject("searchFor").getObject("videos");
+                + " owner { displayName } } } }" + user + " }", "twitch search");
         Page p = new Page();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        JsonObject owner = channel ? data.getObject("user") : null;
+        if (owner != null && !owner.isEmpty()) {
+            String name = owner.getString("displayName", "");
+            for (JsonObject c : nodes(owner.getObject("clips"))) {
+                String slug = c.getString("slug", null);
+                if (slug == null) continue;
+                p.items.add(item("https://clips.twitch.tv/" + slug, c.getString("title", ""), name,
+                        c.getLong("durationSeconds", -1), c.getLong("viewCount", -1), c.getString("createdAt", null),
+                        c.getString("thumbnailURL", null)));
+            }
+            for (JsonObject v : nodes(owner.getObject("videos"))) {
+                String id = v.getString("id", null);
+                if (id == null || v.getLong("lengthSeconds", 0) > MAX_LENGTH_SECONDS || !seen.add(id)) continue;
+                p.items.add(item("https://www.twitch.tv/videos/" + id, v.getString("title", ""), name,
+                        v.getLong("lengthSeconds", -1), v.getLong("viewCount", -1), v.getString("createdAt", null),
+                        v.getString("previewThumbnailURL", null)));
+            }
+        }
+        JsonObject videos = data.getObject("searchFor").getObject("videos");
         JsonArray items = videos.getArray("items");
         for (int i = 0; i < items.size(); i++) {
             JsonObject v = items.getObject(i);
             String id = v.getString("id", null);
-            if (id == null || v.getLong("lengthSeconds", 0) > MAX_LENGTH_SECONDS) continue;
-            StreamInfoItem item = new StreamInfoItem(SERVICE_ID, "https://www.twitch.tv/videos/" + id,
-                    v.getString("title", ""), StreamType.VIDEO_STREAM);
-            item.setUploaderName(v.getObject("owner").getString("displayName", ""));
-            item.setDuration(v.getLong("lengthSeconds", -1));
-            item.setViewCount(v.getLong("viewCount", -1));
-            String created = v.getString("createdAt", null);
-            com.orvid.search.Dates.set(item, created);
-            List<Image> thumbs = new ArrayList<>();
-            String thumb = v.getString("previewThumbnailURL", null);
-            if (thumb != null) thumbs.add(new Image(thumb, 360, 640, Image.ResolutionLevel.MEDIUM));
-            item.setThumbnails(thumbs);
-            p.items.add(item);
+            if (id == null || v.getLong("lengthSeconds", 0) > MAX_LENGTH_SECONDS || !seen.add(id)) continue;
+            p.items.add(item("https://www.twitch.tv/videos/" + id, v.getString("title", ""),
+                    v.getObject("owner").getString("displayName", ""), v.getLong("lengthSeconds", -1),
+                    v.getLong("viewCount", -1), v.getString("createdAt", null), v.getString("previewThumbnailURL", null)));
         }
         String next = videos.getString("cursor", null);
         p.next = next == null || next.isEmpty() || items.isEmpty() ? null : next;
         return p;
+    }
+
+    private static List<JsonObject> nodes(JsonObject connection) {
+        List<JsonObject> out = new ArrayList<>();
+        JsonArray edges = connection == null ? null : connection.getArray("edges");
+        if (edges == null) return out;
+        for (int i = 0; i < edges.size(); i++) {
+            JsonObject node = edges.getObject(i).getObject("node");
+            if (node != null && !node.isEmpty()) out.add(node);
+        }
+        return out;
+    }
+
+    private static StreamInfoItem item(String url, String title, String owner, long seconds, long views,
+            String created, String thumb) {
+        StreamInfoItem item = new StreamInfoItem(SERVICE_ID, url, title, StreamType.VIDEO_STREAM);
+        item.setUploaderName(owner);
+        item.setDuration(seconds);
+        item.setViewCount(views);
+        com.orvid.search.Dates.set(item, created);
+        List<Image> thumbs = new ArrayList<>();
+        if (thumb != null) thumbs.add(new Image(thumb, 360, 640, Image.ResolutionLevel.MEDIUM));
+        item.setThumbnails(thumbs);
+        return item;
     }
 
     public static Media vod(String circuit, String id) throws IOException {

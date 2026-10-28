@@ -33,7 +33,7 @@ final class Script {
     private static final String PRELUDE =
             "var http = { json: function (u, h) { return JSON.parse(http.get(u, h)); }, get: __get, post: __post, check: function (u, h) { return JSON.parse(__check(u, h)); },"
             + " all: function (u, h) { return JSON.parse(__all(JSON.stringify(u), h)); },"
-            + " page: function (u, h) { return JSON.parse(__page(u, h)); } };\n"
+            + " page: function (u, h, b, t) { return JSON.parse(__page(u, h, b, t)); } };\n"
             + "var util = { duration: __duration, number: __number, unescape: __unescape, base64: __base64 };\n"
             + "var env = { tor: __tor() };\n"
             + "var cache = { get: __cacheGet, put: __cachePut };\n"
@@ -154,13 +154,13 @@ final class Script {
         define(scope, "__tor", args -> Fetch.torMode());
         define(scope, "__check", args -> check(circuit, str(args, 0), headers(args, 1)));
         define(scope, "__all", args -> all(circuit, str(args, 0), headers(args, 1)));
-        define(scope, "__page", args -> page(circuit, str(args, 0), headers(args, 1)));
+        define(scope, "__page", args -> page(circuit, str(args, 0), headers(args, 1), str(args, 2), str(args, 3)));
     }
 
     private void cache(ScriptableObject scope, String circuit) {
         define(scope, "__cacheGet", args -> {
             synchronized (memory) {
-                Object[] hit = memory.get(circuit + "\n" + str(args, 0));
+                Object[] hit = memory.get(cacheKey(circuit, args, 1));
                 return hit != null && System.currentTimeMillis() < (Long) hit[1] ? hit[0] : null;
             }
         });
@@ -168,10 +168,15 @@ final class Script {
             double ms = args.length > 2 && args[2] instanceof Number ? ((Number) args[2]).doubleValue() : 3600000;
             synchronized (memory) {
                 if (memory.size() > 64) memory.clear();
-                memory.put(circuit + "\n" + str(args, 0), new Object[] {str(args, 1), System.currentTimeMillis() + (long) ms});
+                memory.put(cacheKey(circuit, args, 3), new Object[] {str(args, 1), System.currentTimeMillis() + (long) ms});
             }
             return null;
         });
+    }
+
+    private static String cacheKey(String circuit, Object[] args, int sharedAt) {
+        boolean shared = args.length > sharedAt && Boolean.TRUE.equals(args[sharedAt]);
+        return (shared ? "" : circuit) + "\n" + str(args, 0);
     }
 
     private interface Host {
@@ -259,7 +264,7 @@ final class Script {
         return com.grack.nanojson.JsonWriter.string(out);
     }
 
-    private static String page(String circuit, String url, NativeObject headers) throws Exception {
+    private static String page(String circuit, String url, NativeObject headers, String payload, String type) throws Exception {
         if (url == null || !url.startsWith("https://") && !url.startsWith("http://")) throw new IOException("bad url");
         return Fetch.on(circuit, () -> {
             HttpURLConnection c = Fetch.open(url);
@@ -270,6 +275,16 @@ final class Script {
             if (headers != null) {
                 for (Map.Entry<Object, Object> e : headers.entrySet()) {
                     c.setRequestProperty(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+                }
+            }
+            if (payload != null) {
+                byte[] raw = payload.getBytes(StandardCharsets.UTF_8);
+                c.setRequestMethod("POST");
+                c.setRequestProperty("Content-Type", type == null ? "application/x-www-form-urlencoded" : type);
+                c.setDoOutput(true);
+                c.setFixedLengthStreamingMode(raw.length);
+                try (OutputStream out = c.getOutputStream()) {
+                    out.write(raw);
                 }
             }
             int code = c.getResponseCode();

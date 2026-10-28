@@ -14,7 +14,6 @@
     <string name="error_unsupported">यह लिंक अभी काम नहीं करता</string>
     <string name="error_playback">वीडियो नहीं चल सका</string>
     <string name="crash_title">पिछली बार Orvid बंद हो गया था</string>
-    <string name="crash_saved">क्रैश रिपोर्ट Download/Orvid/tmp में सेव की गई।</string>
     <string name="crash_share">शेयर करें</string>
     <string name="tor_banner_starting">Tor से कनेक्ट हो रहा है… %d%%</string>
     <string name="tor_banner_failed">Tor कनेक्ट नहीं है। कनेक्ट होने तक कुछ नहीं भेजा जाएगा। फिर कोशिश करने के लिए टैप करें।</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">%1$d स्रोतों में खोज रहा है</string>
     <string name="health_skipped">जवाब नहीं दे रहा, छोड़ा गया</string>
     <string name="tor_off_only">केवल Tor बंद होने पर काम करता है</string>
+    <string name="tor_playback_blocked">Tor पर वीडियो चलाना ब्लॉक है</string>
     <string name="health_down">जवाब नहीं दे रहा। दोबारा आज़माने के लिए बंद करके चालू करें।</string>
     <string name="health_flaky">हाल की खोजों में समस्या आई</string>
+    <string name="health_limited">इस Tor एग्ज़िट से बहुत ज़्यादा अनुरोध। 15 मिनट के लिए रुका है।</string>
     <string name="health_empty">अब तक कोई नतीजा नहीं मिला</string>
     <string name="play_next">अगला चलाएँ</string>
     <string name="add_queue">कतार में जोड़ें</string>

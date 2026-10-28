@@ -150,6 +150,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
                         .putExtra(PlayerActivity.EXTRA_AVATAR, Ui.thumbnail(item.getUploaderAvatars(), Ui.dp(this, 32)))
                         .putExtra(PlayerActivity.EXTRA_DATE, PlayerActivity.dateOf(item))
                         .putExtra(PlayerActivity.EXTRA_URL, item.getUrl())
+                        .putExtra(PlayerActivity.EXTRA_SEED, query == null ? null : query.plainQuery)
                         .putExtra(PlayerActivity.EXTRA_SERVICE, item.getServiceId())
                         .putExtra(PlayerActivity.EXTRA_THUMB, Ui.thumbnail(item.getThumbnails(), 640)));
             overridePendingTransition(0, 0);
@@ -235,6 +236,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
             public void onScroll(AbsListView view, int first, int visible, int total) {
                 adapter.checkPreview();
                 if (shown && first > list.getHeaderViewsCount()) scrolledAway = true;
+                if (shown) deepestRow = Math.max(deepestRow, first + visible - list.getHeaderViewsCount());
                 adapter.prefetchAfter(Math.max(0, first + visible - list.getHeaderViewsCount()) * adapter.columns());
                 if (total > 0 && first + visible >= total - Math.max(12, visible * 3)) loadMore();
             }
@@ -481,9 +483,15 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
         Batch(int extras) {
             extraNext = new String[extras];
+            extraDone = new boolean[extras];
         }
         String ytContinuation;
         boolean dmMore;
+        boolean ytDone;
+        boolean dmDone;
+        boolean vkDone;
+        boolean last;
+        final boolean[] extraDone;
         List<StreamInfoItem> fresh;
         boolean[] barren;
         boolean[] repeating;
@@ -536,6 +544,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         rankDirty = false;
         shown = false;
         scrolledAway = false;
+        deepestRow = 0;
         com.orvid.search.Ranker.reseed();
         arrived = null;
         final Query q = Query.parse(input);
@@ -606,6 +615,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
                             correction.setVisibility(View.VISIBLE);
                         }
                         deliver(generation, q, f, 0, r.value.items);
+                        expandYouTube(generation, q, f, r.value);
                         if (correctedQuery != null && !Query.fold(correctedQuery).equals(Query.fold(q.platformQuery))) {
                             secondWave(generation, Query.parse(correctedQuery), f);
                         }
@@ -742,7 +752,11 @@ public final class MainActivity extends Activity implements Tor.Listener {
             Hedge.Result<Source.Page> first = Hedge.call(com.orvid.net.Prewarm.take(src.key), () -> Fetch.newCircuit(src.key),
                     EXTRA_HEDGE_MS, c -> src.search(c, use.plainQuery, f, null));
             com.orvid.net.Prewarm.learn(src.key, Fetch.firstHost(first.circuit));
-            if (first.value.items.isEmpty()) {
+            if (first.value.skipped) {
+                runOnUiThread(() -> sourceFailed(generation, CORE + slot, null));
+                return;
+            }
+            if (first.value.items.isEmpty() && Fetch.torMode()) {
                 Diag.mark(src.key + " empty, asking again from another exit");
                 com.orvid.net.Trace.note(com.orvid.net.Trace.Step.AGAIN, 0);
                 Hedge.Result<Source.Page> again = Hedge.call(Fetch.newCircuit("x"), () -> Fetch.newCircuit("x"),
@@ -915,6 +929,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
             if (!tracked(i)) continue;
             String key = extras.get(i - CORE).key;
             if (healthCount[i] > 0) com.orvid.search.Health.ok(key);
+            else if (healthCount[i] == -3) com.orvid.search.Health.limit(key);
             else if (others < HEALTH_QUORUM) continue;
             else if (healthCount[i] == -2) {
                 if (!focused) com.orvid.search.Health.fail(key);
@@ -926,8 +941,10 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private static final int HEALTH_QUORUM = 3;
 
     private boolean healthSkip(int generation, int source) {
-        if (!tracked(source) || !com.orvid.search.Health.skip(extras.get(source - CORE).key)) return false;
-        traceSet(generation, source, getString(R.string.health_skipped), true);
+        String key = tracked(source) ? extras.get(source - CORE).key : null;
+        if (key == null || !com.orvid.search.Health.skip(key)) return false;
+        boolean limited = com.orvid.search.Health.state(key) == com.orvid.search.Health.LIMITED;
+        traceSet(generation, source, getString(limited ? R.string.trace_skipped : R.string.health_skipped), true);
         return true;
     }
 
@@ -1368,10 +1385,13 @@ public final class MainActivity extends Activity implements Tor.Listener {
         list.postDelayed(prepareLater, PREPARE_REST_MS);
     }
 
+    private int deepestRow;
+
     private void mergeTail(List<StreamInfoItem> ranked) {
         List<StreamInfoItem> current = adapter.items();
         int visible = Math.max(0, list.getLastVisiblePosition() - list.getHeaderViewsCount() + 1);
-        int keep = Math.min(current.size(), visible * adapter.columns() + 4);
+        int screen = Math.max(1, list.getLastVisiblePosition() - list.getFirstVisiblePosition() + 1);
+        int keep = Math.min(current.size(), (Math.max(visible, deepestRow) + screen) * adapter.columns() + 4);
         if (scrolledAway) while (keep < current.size() && !adapter.inTail(current.get(keep))) keep++;
         int strict = com.orvid.search.Ranker.Ranked.strict(ranked);
         List<StreamInfoItem> head = new ArrayList<>(current.subList(0, keep));
@@ -1396,7 +1416,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         if (e != null && generation == searchGeneration && source < traceError.length) traceError[source] = String.valueOf(e);
         traceSet(generation, source, e == null ? getString(R.string.trace_skipped) : getString(R.string.trace_failed, Ui.error(this, e)), true);
         if (e != null && !(e instanceof Fetch.Cancelled) && tracked(source) && source < healthCount.length) {
-            healthCount[source] = -2;
+            healthCount[source] = com.orvid.search.Health.limited(e) ? -3 : -2;
         }
         pendingSources--;
         lastSourceError = e;
@@ -1478,21 +1498,30 @@ public final class MainActivity extends Activity implements Tor.Listener {
         final boolean[] rankTagged = tagged;
         final java.util.Set<String> shownKeys = adapter.keys();
         new Job<Batch>(this) {
+            private java.util.concurrent.Future<Dailymotion.Page> dm;
+            private java.util.concurrent.Future<com.orvid.vk.Vk.Page> vkf;
+            private java.util.concurrent.Future<Search.Page> yt;
+            private final List<java.util.concurrent.Future<Source.Page>> extraJobs = new ArrayList<>();
+            private boolean ytTaken;
+            private boolean dmTaken;
+            private boolean vkTaken;
+            private boolean[] extraTaken;
+            private int shownAdded;
+
             @Override
             protected Batch load() throws Exception {
                 return Fetch.within(scope, this::collect);
             }
 
             private Batch collect() throws Exception {
-                long until = android.os.SystemClock.uptimeMillis() + moreWait();
-                Batch batch = new Batch(wantExtra.length);
-                java.util.concurrent.Future<Dailymotion.Page> dm = !wantDm ? null
+                long started = android.os.SystemClock.uptimeMillis();
+                long until = started + moreWait();
+                dm = !wantDm ? null
                         : PARALLEL.submit(inScope(scope, () -> Dailymotion.search(Visionos.takeCircuit(), q.plainQuery, nextDm, f.dailymotionParams(), f.type == Filters.TYPE_SHORTS)));
-                java.util.concurrent.Future<com.orvid.vk.Vk.Page> vkf = wantVk == null || ownerVk == null ? null
+                vkf = wantVk == null || ownerVk == null ? null
                         : PARALLEL.submit(inScope(scope, () -> Fetch.retrying(ownerVk, c -> com.orvid.vk.Vk.search(c, q.plainQuery, wantVk))));
-                java.util.concurrent.Future<Search.Page> yt = token == null ? null
+                yt = token == null ? null
                         : PARALLEL.submit(inScope(scope, () -> Fetch.retrying(ownerCircuit, c -> Search.more(c, token))));
-                List<java.util.concurrent.Future<Source.Page>> extraJobs = new ArrayList<>();
                 for (int i = 0; i < sourcesNow.size(); i++) {
                     final Source src = sourcesNow.get(i);
                     final String want = wantExtra[i];
@@ -1504,50 +1533,88 @@ public final class MainActivity extends Activity implements Tor.Listener {
                     }
                     extraJobs.add(job);
                 }
-                batch.ytContinuation = token;
-                if (yt != null) {
-                    try {
-                        Search.Page p = upTo(yt, until);
-                        if (p != null) {
-                            batch.youtube.addAll(p.items);
-                            batch.ytContinuation = p.continuation;
+                extraTaken = new boolean[extraJobs.size()];
+                long early = started + moreFirst();
+                while (android.os.SystemClock.uptimeMillis() < early && !allDone()) {
+                    Thread.sleep(MORE_POLL_MS);
+                }
+                if (!allDone()) {
+                    Batch first = gather(0, false);
+                    if (!first.fresh.isEmpty()) runOnUiThread(() -> apply(first, false));
+                }
+                return gather(until, true);
+            }
+
+            private boolean allDone() {
+                if (yt != null && !yt.isDone() || dm != null && !dm.isDone() || vkf != null && !vkf.isDone()) return false;
+                for (java.util.concurrent.Future<Source.Page> j : extraJobs) if (j != null && !j.isDone()) return false;
+                return true;
+            }
+
+            private Batch gather(long until, boolean last) {
+                Batch batch = new Batch(wantExtra.length);
+                batch.last = last;
+                if (!ytTaken && (last || yt == null || yt.isDone())) {
+                    ytTaken = true;
+                    batch.ytDone = true;
+                    batch.ytContinuation = token;
+                    if (yt != null) {
+                        try {
+                            Search.Page p = upTo(yt, until);
+                            if (p != null) {
+                                batch.youtube.addAll(p.items);
+                                batch.ytContinuation = p.continuation;
+                            }
+                        } catch (Exception ignored) {
                         }
-                    } catch (Exception ignored) {
                     }
                 }
-                batch.dmMore = wantDm;
-                if (dm != null) {
-                    try {
-                        Dailymotion.Page page = upTo(dm, until);
-                        if (page != null) {
-                            batch.dailymotion.addAll(page.items);
-                            batch.dmMore = page.hasMore;
+                if (!dmTaken && (last || dm == null || dm.isDone())) {
+                    dmTaken = true;
+                    batch.dmDone = true;
+                    batch.dmMore = wantDm;
+                    if (dm != null) {
+                        try {
+                            Dailymotion.Page page = upTo(dm, until);
+                            if (page != null) {
+                                batch.dailymotion.addAll(page.items);
+                                batch.dmMore = page.hasMore;
+                            }
+                        } catch (Exception ignored) {
                         }
-                    } catch (Exception ignored) {
                     }
                 }
-                batch.vkNext = wantVk;
-                if (vkf != null) {
-                    try {
-                        com.orvid.vk.Vk.Page page = upTo(vkf, until);
-                        if (page != null) {
-                            batch.vk.addAll(page.items);
-                            batch.vkNext = page.next;
+                if (!vkTaken && (last || vkf == null || vkf.isDone())) {
+                    vkTaken = true;
+                    batch.vkDone = true;
+                    batch.vkNext = wantVk;
+                    if (vkf != null) {
+                        try {
+                            com.orvid.vk.Vk.Page page = upTo(vkf, until);
+                            if (page != null) {
+                                batch.vk.addAll(page.items);
+                                batch.vkNext = page.next;
+                            }
+                        } catch (Exception ignored) {
                         }
-                    } catch (Exception ignored) {
                     }
                 }
                 for (int i = 0; i < extraJobs.size(); i++) {
                     List<StreamInfoItem> got = new ArrayList<>();
-                    batch.extraNext[i] = wantExtra[i];
-                    if (extraJobs.get(i) != null) {
-                        try {
-                            Source.Page page = waitOrKeep(extraJobs.get(i), until, generation, i, wantExtra[i]);
-                            if (page != null) {
-                                got.addAll(page.items);
-                                batch.extraNext[i] = page.next;
+                    java.util.concurrent.Future<Source.Page> job = extraJobs.get(i);
+                    if (!extraTaken[i] && (last || job == null || job.isDone())) {
+                        extraTaken[i] = true;
+                        batch.extraDone[i] = true;
+                        batch.extraNext[i] = wantExtra[i];
+                        if (job != null) {
+                            try {
+                                Source.Page page = waitOrKeep(job, until, generation, i, wantExtra[i]);
+                                if (page != null) {
+                                    got.addAll(page.items);
+                                    batch.extraNext[i] = page.next;
+                                }
+                            } catch (Exception ignored) {
                             }
-                        } catch (Exception ignored) {
                         }
                     }
                     batch.extra.add(got);
@@ -1560,26 +1627,34 @@ public final class MainActivity extends Activity implements Tor.Listener {
                 return batch;
             }
 
-            @Override
-            protected void show(Batch result) {
+            private void apply(Batch result, boolean last) {
                 if (generation != searchGeneration) return;
-                continuation = result.ytContinuation;
-                dmMore = result.dmMore;
-                if (wantDm) dmPage = nextDm;
-                if (wantVk != null) vkNext = result.vkNext;
-                for (int i = 0; i < wantExtra.length; i++) if (wantExtra[i] != null) extraNext[i] = result.extraNext[i];
-                List<StreamInfoItem> fresh = result.fresh;
+                if (result.ytDone) continuation = result.ytContinuation;
+                if (result.dmDone) {
+                    dmMore = result.dmMore;
+                    if (wantDm) dmPage = nextDm;
+                }
+                if (result.vkDone && wantVk != null) vkNext = result.vkNext;
+                for (int i = 0; i < wantExtra.length; i++) {
+                    if (wantExtra[i] != null && result.extraDone[i]) extraNext[i] = result.extraNext[i];
+                }
                 stopPaging(result.barren);
                 stopPaging(result.repeating, "repeats earlier results");
                 int frozen = (Math.max(0, list.getLastVisiblePosition() - list.getHeaderViewsCount()) + 2) * adapter.columns();
-                int added = adapter.add(fresh, frozen);
+                shownAdded += adapter.add(result.fresh, frozen);
                 com.orvid.play.Session.lastSearch = adapter.items();
+                if (!last) return;
                 loadingMore = false;
-                if (added < REFILL_BELOW) {
+                if (shownAdded < REFILL_BELOW) {
                     if (++emptyBatches <= MAX_EMPTY_BATCHES) list.post(MainActivity.this::loadMore);
                 } else {
                     emptyBatches = 0;
                 }
+            }
+
+            @Override
+            protected void show(Batch result) {
+                apply(result, true);
             }
 
             @Override
@@ -1590,10 +1665,17 @@ public final class MainActivity extends Activity implements Tor.Listener {
     }
 
     private static final long MORE_WAIT_MS = 6000;
-    private static final long MORE_WAIT_DIRECT_MS = 2500;
+    private static final long MORE_WAIT_DIRECT_MS = 1200;
+    private static final long MORE_FIRST_MS = 2500;
+    private static final long MORE_FIRST_DIRECT_MS = 700;
+    private static final long MORE_POLL_MS = 50;
 
     private static long moreWait() {
         return Fetch.torMode() ? MORE_WAIT_MS : MORE_WAIT_DIRECT_MS;
+    }
+
+    private static long moreFirst() {
+        return Fetch.torMode() ? MORE_FIRST_MS : MORE_FIRST_DIRECT_MS;
     }
 
     private final java.util.Map<Integer, Object[]> stragglers = new java.util.HashMap<>();
@@ -1627,6 +1709,90 @@ public final class MainActivity extends Activity implements Tor.Listener {
             f.cancel(true);
             return null;
         }
+    }
+
+    private static final int ARTIST_PAGES = 8;
+    private static final int ALBUM_PAGES = 3;
+    private static final int MAX_ALBUMS = 12;
+    private static final int ALIAS_PAGES = 2;
+    private static final int WEB_PAGES = 2;
+
+    private void expandYouTube(int generation, Query q, Filters f, Search.Page first) {
+        String text = q.platformQuery == null ? "" : q.platformQuery.trim();
+        if (text.isEmpty() || f.date != Filters.DATE_ANY || f.type == Filters.TYPE_SHORTS) return;
+        Fetch.Scope scope = searchScope;
+        if (!com.orvid.yt.Related.safeSearch) {
+            PARALLEL.submit(inScope(scope, () -> {
+                extendYouTube(generation, com.orvid.yt.WebSearch.pages(Visionos.takeCircuit(), text, WEB_PAGES));
+                return null;
+            }));
+        }
+        List<String> lists = new ArrayList<>();
+        String uploads = com.orvid.yt.Playlist.uploads(first.artistId);
+        if (uploads != null) lists.add(uploads);
+        for (String id : first.albums) if (lists.size() <= MAX_ALBUMS) lists.add(id);
+        for (int i = 0; i < first.playlists.size() && lists.size() <= MAX_ALBUMS; i++) {
+            if (com.orvid.search.Ranker.covers(q, first.playlistTitles.get(i))) lists.add(first.playlists.get(i));
+        }
+        for (String id : lists) {
+            int pages = id.equals(uploads) ? ARTIST_PAGES : ALBUM_PAGES;
+            PARALLEL.submit(inScope(scope, () -> {
+                String c = Visionos.takeCircuit();
+                Search.Page p = Fetch.retrying(c, cc -> com.orvid.yt.Playlist.first(cc, id));
+                List<StreamInfoItem> all = new ArrayList<>(p.items);
+                for (int n = 1; n < pages && p.continuation != null; n++) {
+                    String token = p.continuation;
+                    p = Fetch.retrying(c, cc -> com.orvid.yt.Playlist.more(cc, token));
+                    all.addAll(p.items);
+                }
+                com.orvid.search.Ranker.vouch(all);
+                extendYouTube(generation, all);
+                return null;
+            }));
+        }
+        String alias = first.artistName == null ? "" : first.artistName.trim();
+        if (alias.isEmpty() || Query.fold(alias).equals(Query.fold(text))) return;
+        Query named = Query.parse(alias);
+        PARALLEL.submit(inScope(scope, () -> {
+            String c = Visionos.takeCircuit();
+            Search.Page p = Fetch.retrying(c, cc -> Search.first(cc, alias, f.youtubeParams()));
+            List<StreamInfoItem> found = new ArrayList<>(p.items);
+            for (int n = 1; n < ALIAS_PAGES && p.continuation != null; n++) {
+                String token = p.continuation;
+                p = Fetch.retrying(c, cc -> Search.more(cc, token));
+                found.addAll(p.items);
+            }
+            List<StreamInfoItem> kept = new ArrayList<>();
+            for (StreamInfoItem i : found) if (com.orvid.search.Ranker.covers(named, i)) kept.add(i);
+            com.orvid.search.Ranker.vouch(kept);
+            extendYouTube(generation, kept);
+            return null;
+        }));
+    }
+
+    private void extendYouTube(int generation, List<StreamInfoItem> items) {
+        extendYouTube(generation, items, 8);
+    }
+
+    private void extendYouTube(int generation, List<StreamInfoItem> items, int tries) {
+        if (items.isEmpty()) return;
+        runOnUiThread(() -> {
+            if (generation != searchGeneration || arrived == null) return;
+            if ((!shown || settling()) && tries > 0) {
+                long wait = !shown ? SETTLE_MS : Math.max(0, settleUntil - android.os.SystemClock.uptimeMillis());
+                list.postDelayed(() -> extendYouTube(generation, items, tries - 1), wait + 50);
+                return;
+            }
+            List<StreamInfoItem> merged = new ArrayList<>(arrived.get(0));
+            java.util.Set<String> have = new java.util.HashSet<>();
+            for (StreamInfoItem i : merged) have.add(i.getUrl());
+            int before = merged.size();
+            for (StreamInfoItem i : items) if (have.add(i.getUrl())) merged.add(i);
+            if (merged.size() == before) return;
+            Diag.mark("youtube extra " + (merged.size() - before) + " items");
+            arrived.set(0, merged);
+            requestRank(generation, !shown || settling());
+        });
     }
 
     private static <T> java.util.concurrent.Callable<T> inScope(Fetch.Scope scope, java.util.concurrent.Callable<T> work) {

@@ -20,10 +20,20 @@ public final class Search {
         public final List<StreamInfoItem> items = new ArrayList<>();
         public String continuation;
         public String corrected;
+        public String artistId;
+        public String artistName;
+        public final List<String> albums = new ArrayList<>();
+        public final List<String> playlists = new ArrayList<>();
+        public final List<String> playlistTitles = new ArrayList<>();
     }
 
     private static final String FIRST_MASK = "contents.sectionListRenderer.contents(continuationItemRenderer,"
-            + "itemSectionRenderer.contents(showingResultsForRenderer," + Related.VIDEO_FIELDS + "))";
+            + "universalWatchCardRenderer.header.watchCardRichHeaderRenderer(title,titleNavigationEndpoint),"
+            + "itemSectionRenderer.contents(showingResultsForRenderer,compactChannelRenderer(channelId,displayName),"
+            + "compactPlaylistRenderer(playlistId,title),"
+            + "horizontalCardListRenderer.cards.searchRefinementCardRenderer(query,searchEndpoint),"
+            + "gridShelfViewModel.contents.shortsLockupViewModel(entityId,overlayMetadata,accessibilityText),"
+            + Related.VIDEO_FIELDS + "))";
     private static final String MORE_MASK = "onResponseReceivedCommands.appendContinuationItemsAction.continuationItems("
             + "continuationItemRenderer,itemSectionRenderer.contents(" + Related.VIDEO_FIELDS + "))";
 
@@ -46,7 +56,57 @@ public final class Search {
         Related.collect(root, p.items);
         p.continuation = token(root);
         p.corrected = corrected(root);
+        music(root, p);
         return p;
+    }
+
+    private static void music(Object node, Page p) {
+        if (node instanceof JsonObject) {
+            JsonObject o = (JsonObject) node;
+            JsonObject card = o.getObject("watchCardRichHeaderRenderer", null);
+            if (card != null && p.artistId == null) {
+                String id = card.getObject("titleNavigationEndpoint").getObject("browseEndpoint").getString("browseId", null);
+                if (id != null && id.startsWith("UC")) {
+                    p.artistId = id;
+                    p.artistName = runs(card.getObject("title"));
+                }
+            }
+            JsonObject channel = o.getObject("compactChannelRenderer", null);
+            if (channel != null && p.artistId == null) {
+                String name = runs(channel.getObject("displayName"));
+                if (name.endsWith(" - Topic")) {
+                    p.artistId = channel.getString("channelId", null);
+                    p.artistName = name.substring(0, name.length() - " - Topic".length());
+                }
+            }
+            JsonObject refine = o.getObject("searchRefinementCardRenderer", null);
+            if (refine != null) {
+                String id = refine.getObject("searchEndpoint").getObject("watchPlaylistEndpoint").getString("playlistId", null);
+                if (id != null && !p.albums.contains(id)) p.albums.add(id);
+                return;
+            }
+            JsonObject playlist = o.getObject("compactPlaylistRenderer", null);
+            if (playlist != null) {
+                String id = playlist.getString("playlistId", null);
+                if (id != null && !p.playlists.contains(id)) {
+                    p.playlists.add(id);
+                    p.playlistTitles.add(runs(playlist.getObject("title")));
+                }
+                return;
+            }
+            for (Object child : o.values()) music(child, p);
+        } else if (node instanceof JsonArray) {
+            for (Object child : (JsonArray) node) music(child, p);
+        }
+    }
+
+    private static String runs(JsonObject text) {
+        String simple = text.getString("simpleText", null);
+        if (simple != null) return simple.trim();
+        StringBuilder sb = new StringBuilder();
+        JsonArray runs = text.getArray("runs");
+        for (int i = 0; i < runs.size(); i++) sb.append(runs.getObject(i).getString("text", ""));
+        return sb.toString().trim();
     }
 
     private static String corrected(Object node) {
@@ -80,6 +140,12 @@ public final class Search {
             if (item != null) {
                 String t = item.getObject("continuationEndpoint").getObject("continuationCommand")
                         .getString("token", null);
+                if (t != null) return t;
+            }
+            JsonObject view = o.getObject("continuationItemViewModel", null);
+            if (view != null) {
+                String t = view.getObject("continuationCommand").getObject("innertubeCommand")
+                        .getObject("continuationCommand").getString("token", null);
                 if (t != null) return t;
             }
             for (Object child : o.values()) {

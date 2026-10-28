@@ -47,8 +47,6 @@ public final class Repos {
 
     public static final String OFFICIAL = "https://raw.githubusercontent.com/mankidev/orvid-sources/main/";
     public static final String SECRET = "https://raw.githubusercontent.com/mankidev/orvid-sources-secret/main/";
-    public static final String FILMS = "https://raw.githubusercontent.com/mankidev/orvid-films/main/";
-    public static final String SEARCH = "https://raw.githubusercontent.com/mankidev/orvid-search/main/";
 
     public static boolean installed(File root, String url) {
         String wanted = canonical(normalize(url));

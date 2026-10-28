@@ -10,6 +10,7 @@ public abstract class Source {
     public static final class Page {
         public final List<StreamInfoItem> items = new ArrayList<>();
         public String next;
+        public boolean skipped;
 
         public Page() {
         }

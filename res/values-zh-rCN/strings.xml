@@ -14,7 +14,6 @@
     <string name="error_unsupported">暂不支持此链接</string>
     <string name="error_playback">无法播放视频</string>
     <string name="crash_title">Orvid 上次意外停止</string>
-    <string name="crash_saved">崩溃报告已保存到 Download/Orvid/tmp。</string>
     <string name="crash_share">分享</string>
     <string name="tor_banner_starting">正在连接 Tor… %d%%</string>
     <string name="tor_banner_failed">Tor 未连接。连接前不会发送任何内容。点按重试。</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">正在搜索 %1$d 个来源</string>
     <string name="health_skipped">无响应，已跳过</string>
     <string name="tor_off_only">仅在关闭 Tor 时可用</string>
+    <string name="tor_playback_blocked">通过 Tor 无法播放视频</string>
     <string name="health_down">无响应。关闭后再打开即可重试。</string>
     <string name="health_flaky">最近的搜索中出现问题</string>
+    <string name="health_limited">来自此 Tor 出口的请求过多。暂停 15 分钟。</string>
     <string name="health_empty">尚未返回任何结果</string>
     <string name="play_next">接下来播放</string>
     <string name="add_queue">加入队列</string>

@@ -146,6 +146,18 @@ public final class Related {
                 if (item != null) out.add(item);
                 return;
             }
+            JsonObject lockup = o.getObject("lockupViewModel", null);
+            if (lockup != null) {
+                StreamInfoItem item = lockup(lockup);
+                if (item != null) out.add(item);
+                return;
+            }
+            JsonObject shorts = o.getObject("shortsLockupViewModel", null);
+            if (shorts != null) {
+                StreamInfoItem item = shorts(shorts);
+                if (item != null) out.add(item);
+                return;
+            }
             for (Object child : o.values()) collect(child, out);
         } else if (node instanceof JsonArray) {
             for (Object child : (JsonArray) node) collect(child, out);
@@ -173,6 +185,65 @@ public final class Related {
         item.setThumbnails(images(v.getObject("thumbnail").getArray("thumbnails")));
         item.setUploaderAvatars(images(v.getObject("channelThumbnail")
                 .getObject("channelThumbnailWithLinkRenderer").getObject("thumbnail").getArray("thumbnails")));
+        return item;
+    }
+
+    private static StreamInfoItem lockup(JsonObject l) {
+        String id = l.getString("contentId", null);
+        if (id == null || !"LOCKUP_CONTENT_TYPE_VIDEO".equals(l.getString("contentType", null))) return null;
+        JsonObject meta = l.getObject("metadata").getObject("lockupMetadataViewModel");
+        String title = meta.getObject("title").getString("content", "");
+        StreamInfoItem item = new StreamInfoItem(ServiceList.YouTube.getServiceId(),
+                "https://www.youtube.com/watch?v=" + id, title, StreamType.VIDEO_STREAM);
+        JsonArray rows = meta.getObject("metadata").getObject("contentMetadataViewModel").getArray("metadataRows");
+        for (int r = 0; r < rows.size(); r++) {
+            JsonArray parts = rows.getObject(r).getArray("metadataParts");
+            for (int k = 0; k < parts.size(); k++) {
+                String text = parts.getObject(k).getObject("text").getString("content", "");
+                if (r == 0 && k == 0) {
+                    item.setUploaderName(text);
+                } else if (text.toLowerCase(java.util.Locale.ROOT).contains("view")) {
+                    item.setViewCount(com.orvid.search.Counts.views(text, "en"));
+                } else if (item.getTextualUploadDate() == null && com.orvid.search.Counts.ageSeconds(text) >= 0) {
+                    item.setTextualUploadDate(text);
+                    item.setUploadDate(new org.schabi.newpipe.extractor.localization.DateWrapper(
+                            java.time.Instant.now().minusSeconds(com.orvid.search.Counts.ageSeconds(text)), true));
+                }
+            }
+        }
+        String channel = meta.getObject("image").getObject("decoratedAvatarViewModel").getObject("rendererContext")
+                .getObject("commandContext").getObject("onTap").getObject("innertubeCommand")
+                .getObject("browseEndpoint").getString("browseId", null);
+        if (channel != null && channel.startsWith("UC")) item.setUploaderUrl("https://www.youtube.com/channel/" + channel);
+        JsonObject thumb = l.getObject("contentImage").getObject("thumbnailViewModel");
+        JsonArray overlays = thumb.getArray("overlays");
+        for (int i = 0; i < overlays.size(); i++) {
+            JsonArray badges = overlays.getObject(i).getObject("thumbnailBottomOverlayViewModel").getArray("badges");
+            for (int b = 0; b < badges.size(); b++) {
+                long d = seconds(badges.getObject(b).getObject("thumbnailBadgeViewModel").getString("text", ""));
+                if (d > 0) item.setDuration(d);
+            }
+        }
+        item.setThumbnails(images(thumb.getObject("image").getArray("sources")));
+        return item;
+    }
+
+    private static StreamInfoItem shorts(JsonObject s) {
+        String entity = s.getString("entityId", "");
+        String id = entity.startsWith("shorts-shelf-item-") ? entity.substring("shorts-shelf-item-".length()) : null;
+        if (id == null || id.length() != 11) return null;
+        JsonObject overlay = s.getObject("overlayMetadata");
+        StreamInfoItem item = new StreamInfoItem(ServiceList.YouTube.getServiceId(),
+                "https://www.youtube.com/watch?v=" + id, overlay.getObject("primaryText").getString("content", ""),
+                StreamType.VIDEO_STREAM);
+        item.setShortFormContent(true);
+        item.setViewCount(com.orvid.search.Counts.views(overlay.getObject("secondaryText").getString("content", ""), "en"));
+        String label = s.getString("accessibilityText", "");
+        String[] parts = label.split(", ");
+        if (parts.length >= 4) item.setUploaderName(parts[parts.length - 2]);
+        List<Image> thumbs = new ArrayList<>();
+        thumbs.add(new Image("https://i.ytimg.com/vi/" + id + "/hqdefault.jpg", 360, 480, Image.ResolutionLevel.MEDIUM));
+        item.setThumbnails(thumbs);
         return item;
     }
 

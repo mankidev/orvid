@@ -199,6 +199,8 @@ final class FilterSheet {
             int health = com.orvid.search.Health.state(s.key);
             if (s instanceof com.orvid.ext.ExtSource && ((com.orvid.ext.ExtSource) s).torless && com.orvid.net.Fetch.torMode()) {
                 markNote(activity, column, sw, activity.getString(R.string.tor_off_only), 0xFF8A8A8A);
+            } else if (s instanceof com.orvid.ext.ExtSource && !((com.orvid.ext.ExtSource) s).torPlayback && com.orvid.net.Fetch.torMode()) {
+                markNote(activity, column, sw, activity.getString(R.string.tor_playback_blocked), 0xFF8A8A8A);
             } else if (health != com.orvid.search.Health.OK) markHealth(activity, column, sw, health);
             if (!s.adult) normalSwitches.add(sw);
             if (s.adult) {
@@ -412,7 +414,8 @@ final class FilterSheet {
     private static void markHealth(Activity a, LinearLayout column, Switch sw, int health) {
         boolean down = health == com.orvid.search.Health.DOWN;
         String note = a.getString(down ? R.string.health_down
-                : health == com.orvid.search.Health.EMPTY ? R.string.health_empty : R.string.health_flaky);
+                : health == com.orvid.search.Health.EMPTY ? R.string.health_empty
+                : health == com.orvid.search.Health.LIMITED ? R.string.health_limited : R.string.health_flaky);
         markNote(a, column, sw, note, down ? 0xFFE5484D : 0xFFE5A000);
     }
 

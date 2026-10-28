@@ -14,7 +14,6 @@
     <string name="error_unsupported">Ce lien n\'est pas encore pris en charge</string>
     <string name="error_playback">Impossible de lire la vidéo</string>
     <string name="crash_title">Orvid s\'est arrêté la dernière fois</string>
-    <string name="crash_saved">Un rapport de plantage a été enregistré dans Download/Orvid/tmp.</string>
     <string name="crash_share">Partager</string>
     <string name="tor_banner_starting">Connexion à Tor… %d%%</string>
     <string name="tor_banner_failed">Tor n\'est pas connecté. Rien n\'est envoyé tant qu\'il ne l\'est pas. Touchez pour réessayer.</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">Recherche dans %1$d sources</string>
     <string name="health_skipped">ne répond pas, ignoré</string>
     <string name="tor_off_only">Fonctionne uniquement quand Tor est désactivé</string>
+    <string name="tor_playback_blocked">La lecture vidéo est bloquée via Tor</string>
     <string name="health_down">Ne répond pas. Désactivez puis réactivez pour réessayer.</string>
     <string name="health_flaky">A eu des problèmes lors des dernières recherches</string>
+    <string name="health_limited">Trop de requêtes depuis cette sortie Tor. En pause pendant 15 minutes.</string>
     <string name="health_empty">N\'a encore donné aucun résultat</string>
     <string name="play_next">Lire ensuite</string>
     <string name="add_queue">Ajouter à la file</string>

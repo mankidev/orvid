@@ -40,7 +40,9 @@ final class Europeana extends Site {
             p.items.add(item);
         }
         if (start + ROWS <= root.getInt("totalResults", 0)) p.next = Integer.toString(start + ROWS);
+        dropUnreachable(p.items, files);
         durations(p.items, DURATION_BUDGET_MS, item -> mp4Seconds(circuit, files.get(item)));
+        dropUnreachable(p.items, files);
         return p;
     }
 

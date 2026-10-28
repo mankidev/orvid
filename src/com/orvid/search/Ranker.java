@@ -155,7 +155,30 @@ public final class Ranker {
         return n <= ALL_TERMS_UP_TO ? n : (n * 2 + 2) / 3;
     }
 
+    private static final java.util.Set<StreamInfoItem> VOUCHED =
+            java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>()));
+
+    public static void vouch(java.util.Collection<StreamInfoItem> items) {
+        VOUCHED.addAll(items);
+    }
+
+    static boolean vouched(StreamInfoItem item) {
+        return VOUCHED.contains(item);
+    }
+
+    public static boolean covers(Query q, StreamInfoItem item) {
+        return !q.terms.isEmpty() && coverage(q, item) >= q.terms.size();
+    }
+
+    public static boolean covers(Query q, String title) {
+        if (q.terms.isEmpty()) return false;
+        List<String> words = Query.words(Query.fold(title == null ? "" : title));
+        for (String t : q.terms) if (!contains(words, t)) return false;
+        return true;
+    }
+
     static int coverage(Query q, StreamInfoItem item) {
+        if (vouched(item)) return q.terms.size();
         List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
         List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
         int n = 0;
@@ -166,7 +189,7 @@ public final class Ranker {
     }
 
     static boolean mentions(Query q, StreamInfoItem item) {
-        if (q.terms.isEmpty()) return true;
+        if (q.terms.isEmpty() || vouched(item)) return true;
         List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
         List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
         for (String t : q.terms) {
@@ -451,9 +474,10 @@ public final class Ranker {
         double s = 0;
         int matched = 0;
         int anchoredMatched = 0;
+        boolean vouched = vouched(item);
         for (String t : q.terms) {
             boolean inTitle = contains(titleWords, t) || Query.acronym(t, titleWords);
-            boolean inChannel = contains(channelWords, t) || !inTitle && Source.about(t, item);
+            boolean inChannel = contains(channelWords, t) || !inTitle && (vouched || Source.about(t, item));
             if (inTitle) s += 3;
             if (inChannel) s += 2;
             if (inTitle || inChannel) {
@@ -548,7 +572,7 @@ public final class Ranker {
                                                boolean trustNext, int minimum) {
         List<String> keys = keyTerms(Query.parse(title).terms);
         int needed = keys.size() >= 3 ? 2 : 1;
-        String ownChannel = Query.fold(channel == null ? "" : channel);
+        String ownChannel = channelNamed(channel, title) ? Query.fold(channel) : "";
         List<Scored> all = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
         seen.add(selfUrl);
@@ -594,19 +618,36 @@ public final class Ranker {
         return out;
     }
 
+    public static boolean channelNamed(String channel, String title) {
+        if (channel == null || title == null) return false;
+        String name = Query.fold(channel.replaceFirst("(?i)\\s*-\\s*topic\\s*$", ""));
+        List<String> parts = keyTerms(Query.words(name));
+        if (parts.isEmpty()) return false;
+        List<String> words = Query.words(Query.fold(title));
+        for (String p : parts) {
+            for (String w : words) if (sameWord(p, w)) return true;
+        }
+        String joined = compact(name);
+        return joined.length() >= 4 && compact(Query.fold(title)).contains(joined);
+    }
+
     public static boolean nearTopic(String title, String channel, StreamInfoItem item, List<StreamInfoItem> shown) {
         String itemChannel = Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName());
-        if (!itemChannel.isEmpty()) {
+        if (!itemChannel.isEmpty() && channelNamed(item.getUploaderName(), title)) {
             if (itemChannel.equals(Query.fold(channel == null ? "" : channel))) return true;
             for (StreamInfoItem s : shown) {
                 if (itemChannel.equals(Query.fold(s.getUploaderName() == null ? "" : s.getUploaderName()))) return true;
             }
         }
         java.util.Set<String> topic = new java.util.HashSet<>(keyTerms(Query.parse(title == null ? "" : title).terms));
+        java.util.Set<String> channels = new java.util.HashSet<>(Query.words(Query.fold(channel == null ? "" : channel)));
+        for (StreamInfoItem s : shown) {
+            channels.addAll(Query.words(Query.fold(s.getUploaderName() == null ? "" : s.getUploaderName())));
+        }
         java.util.Map<String, Integer> seen = new java.util.HashMap<>();
         for (StreamInfoItem s : shown) {
             for (String w : new java.util.HashSet<>(keyTerms(Query.words(Query.fold(s.getName() == null ? "" : s.getName()))))) {
-                if (!Query.isStop(w)) seen.merge(w, 1, Integer::sum);
+                if (!Query.isStop(w) && !channels.contains(w)) seen.merge(w, 1, Integer::sum);
             }
         }
         for (java.util.Map.Entry<String, Integer> e : seen.entrySet()) if (e.getValue() >= 2) topic.add(e.getKey());

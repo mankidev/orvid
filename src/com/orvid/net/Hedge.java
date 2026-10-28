@@ -66,7 +66,7 @@ public final class Hedge {
                     stopOthers(lanes, null);
                     throw last;
                 }
-                if (b == null && spare != null && !(last instanceof Fetch.Cancelled)) {
+                if (b == null && spare != null && Fetch.torMode() && !(last instanceof Fetch.Cancelled)) {
                     Diag.mark("hedge: first circuit failed early, second circuit now");
                     Trace.note(Trace.Step.LANE, 2);
                     b = submit(done, lanes, spare.get(), task, true);

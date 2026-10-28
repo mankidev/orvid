@@ -14,7 +14,6 @@
     <string name="error_unsupported">Ten link nie jest jeszcze obsługiwany</string>
     <string name="error_playback">Nie udało się odtworzyć filmu</string>
     <string name="crash_title">Ostatnio Orvid został zamknięty</string>
-    <string name="crash_saved">Raport o awarii zapisano w Download/Orvid/tmp.</string>
     <string name="crash_share">Udostępnij</string>
     <string name="tor_banner_starting">Łączenie z Tor… %d%%</string>
     <string name="tor_banner_failed">Tor nie jest połączony. Nic nie jest wysyłane, dopóki nie będzie. Dotknij, aby ponowić.</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">Przeszukuje źródła: %1$d</string>
     <string name="health_skipped">nie odpowiada, pominięto</string>
     <string name="tor_off_only">Działa tylko przy wyłączonym Torze</string>
+    <string name="tor_playback_blocked">Odtwarzanie wideo przez Tor jest zablokowane</string>
     <string name="health_down">Nie odpowiada. Wyłącz i włącz, aby spróbować ponownie.</string>
     <string name="health_flaky">Sprawiało problemy w ostatnich wyszukiwaniach</string>
+    <string name="health_limited">Za dużo zapytań z tego wyjścia Tor. Wstrzymane na 15 minut.</string>
     <string name="health_empty">Nie zwróciło jeszcze żadnych wyników</string>
     <string name="play_next">Odtwórz następne</string>
     <string name="add_queue">Dodaj do kolejki</string>

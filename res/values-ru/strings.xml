@@ -14,7 +14,6 @@
     <string name="error_unsupported">Эта ссылка пока не поддерживается</string>
     <string name="error_playback">Не удалось воспроизвести видео</string>
     <string name="crash_title">В прошлый раз Orvid закрылся с ошибкой</string>
-    <string name="crash_saved">Отчёт об ошибке сохранён в Download/Orvid/tmp.</string>
     <string name="crash_share">Поделиться</string>
     <string name="tor_banner_starting">Подключение к Tor… %d%%</string>
     <string name="tor_banner_failed">Tor не подключён. Пока он не подключится, ничего не отправляется. Нажмите, чтобы повторить.</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">Поиск в источниках: %1$d</string>
     <string name="health_skipped">не отвечает, пропущено</string>
     <string name="tor_off_only">Работает только при выключенном Tor</string>
+    <string name="tor_playback_blocked">Воспроизведение видео через Tor заблокировано</string>
     <string name="health_down">Не отвечает. Выключите и включите, чтобы попробовать снова.</string>
     <string name="health_flaky">Были проблемы при последних поисках</string>
+    <string name="health_limited">Слишком много запросов с этого выхода Tor. Пауза на 15 минут.</string>
     <string name="health_empty">Пока не вернул ни одного результата</string>
     <string name="play_next">Воспроизвести следующим</string>
     <string name="add_queue">Добавить в очередь</string>

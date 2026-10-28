@@ -109,8 +109,6 @@ final class RepoDialog {
         String[][] suggested = {
                 {a.getString(R.string.repo_official), Repos.OFFICIAL},
                 {"Orvid secret (18+)", Repos.SECRET},
-                {"Orvid films", Repos.FILMS},
-                {"Orvid search", Repos.SEARCH},
         };
         for (String[] s : suggested) {
             if (Repos.installed(OrvidApp.get().extRoot(), s[1])) continue;
@@ -314,6 +312,9 @@ final class RepoDialog {
 
             @Override
             protected void show(Repos.Repo r) {
+                for (com.orvid.ext.ExtSource s : com.orvid.ext.Registry.sources()) {
+                    if (s.repo.equals(r.id)) com.orvid.search.Health.reset(s.key);
+                }
                 fill(1f);
                 finish = () -> {
                     busy = false;

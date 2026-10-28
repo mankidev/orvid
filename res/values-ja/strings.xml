@@ -14,7 +14,6 @@
     <string name="error_unsupported">このリンクはまだ対応していません</string>
     <string name="error_playback">動画を再生できませんでした</string>
     <string name="crash_title">前回 Orvid が停止しました</string>
-    <string name="crash_saved">クラッシュレポートを Download/Orvid/tmp に保存しました。</string>
     <string name="crash_share">共有</string>
     <string name="tor_banner_starting">Tor に接続中… %d%%</string>
     <string name="tor_banner_failed">Tor に接続されていません。接続されるまで何も送信されません。タップして再試行。</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">%1$d 個のソースを検索中</string>
     <string name="health_skipped">応答なし、スキップ</string>
     <string name="tor_off_only">Tor がオフのときだけ使えます</string>
+    <string name="tor_playback_blocked">Tor 経由では動画を再生できません</string>
     <string name="health_down">応答がありません。オフにしてからオンにすると再試行します。</string>
     <string name="health_flaky">最近の検索で問題がありました</string>
+    <string name="health_limited">この Tor 出口からのリクエストが多すぎます。15 分間停止中です。</string>
     <string name="health_empty">まだ結果を返したことがありません</string>
     <string name="play_next">次に再生</string>
     <string name="add_queue">キューに追加</string>

@@ -71,9 +71,7 @@ public final class Sources {
             web("spankbang", "SpankBang (18+)", R.drawable.ic_src_spankbang, WebSites.SPANKBANG),
             web("fourkporn", "4kporn (18+)", R.drawable.ic_src_fourkporn, WebSites.FOURKPORN),
             web("jable", "Jable (18+)", R.drawable.ic_src_jable, WebSites.JABLE),
-            web("missav", "MissAV (18+)", R.drawable.ic_src_missav, WebSites.MISSAV),
-            web("ashemaletube", "aShemaleTube (18+)", R.drawable.ic_src_ashemaletube, WebSites.ASHEMALETUBE),
-            web("boyfriendtv", "BoyfriendTV (18+)", R.drawable.ic_src_boyfriendtv, WebSites.BOYFRIENDTV));
+            web("missav", "MissAV (18+)", R.drawable.ic_src_missav, WebSites.MISSAV));
 
     private static Source site(String key, int icon, Site site, double weight) {
         return new Source(key, site.name, icon, site.serviceId, weight, true, false) {

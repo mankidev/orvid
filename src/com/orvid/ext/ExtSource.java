@@ -75,6 +75,7 @@ public final class ExtSource extends Source {
     boolean browse;
     public boolean portal;
     public boolean torless;
+    public boolean torPlayback = true;
 
     @Override
     public boolean browses() {
@@ -135,6 +136,7 @@ public final class ExtSource extends Source {
             p.items.add(item(o, url));
         }
         p.next = out.getString("next", null);
+        p.skipped = out.getBoolean("skip", false) && p.items.isEmpty();
         return p;
     }
 

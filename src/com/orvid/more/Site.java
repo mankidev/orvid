@@ -98,7 +98,60 @@ public abstract class Site {
         }
     }
 
+    private static final long DEAD_HOST_MS = 10 * 60_000L;
+    private static final java.util.Map<String, Long> DEAD_HOSTS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<String, java.util.Set<String>> FAILED_HOSTS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    protected static void dropUnreachable(List<StreamInfoItem> items, java.util.Map<StreamInfoItem, String> media) {
+        items.removeIf(item -> unreachable(media.get(item)));
+    }
+
+    private static String host(String url) {
+        try {
+            return url == null ? null : new java.net.URL(url).getHost();
+        } catch (java.net.MalformedURLException e) {
+            return null;
+        }
+    }
+
+    private static boolean unreachable(String url) {
+        String host = host(url);
+        Long until = host == null ? null : DEAD_HOSTS.get(host);
+        if (until == null) return false;
+        if (until > System.currentTimeMillis()) return true;
+        DEAD_HOSTS.remove(host, until);
+        return false;
+    }
+
+    private static void reached(String url, String circuit, Exception error) {
+        String host = host(url);
+        if (host == null) return;
+        if (error == null) {
+            FAILED_HOSTS.remove(host);
+            return;
+        }
+        if (!refused(error)) return;
+        java.util.Set<String> circuits = FAILED_HOSTS.computeIfAbsent(host, h -> java.util.concurrent.ConcurrentHashMap.newKeySet());
+        circuits.add(String.valueOf(circuit));
+        if (Fetch.torMode() && circuits.size() < 2) return;
+        DEAD_HOSTS.put(host, System.currentTimeMillis() + DEAD_HOST_MS);
+        FAILED_HOSTS.remove(host);
+        Diag.mark("unreachable media host " + host);
+    }
+
+    private static boolean refused(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof java.net.UnknownHostException || t instanceof java.net.ConnectException
+                    || t instanceof java.net.NoRouteToHostException) return true;
+            String m = String.valueOf(t.getMessage()).toLowerCase(java.util.Locale.ROOT);
+            if (t instanceof java.net.SocketTimeoutException && m.contains("connect")) return true;
+            if (m.startsWith("unable to tunnel through proxy")) return true;
+        }
+        return false;
+    }
+
     protected static long mp4Seconds(String circuit, String url) throws Exception {
+        if (unreachable(url)) throw new IOException("unreachable host");
         long offset = 0;
         for (int hop = 0; hop < MP4_HOPS; hop++) {
             final long from = offset;
@@ -108,6 +161,15 @@ public abstract class Site {
                 c.setRequestProperty("Range", "bytes=" + from + "-" + (from + 4095));
                 c.setConnectTimeout(10000);
                 c.setReadTimeout(10000);
+                if (from == 0) {
+                    try {
+                        c.connect();
+                        reached(url, circuit, null);
+                    } catch (IOException e) {
+                        reached(url, circuit, e);
+                        throw e;
+                    }
+                }
                 if (c.getResponseCode() != 206 && from > 0) throw new IOException("no range");
                 if (c.getResponseCode() >= 400) throw new IOException("HTTP " + c.getResponseCode());
                 try (InputStream in = c.getInputStream()) {

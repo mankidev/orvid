@@ -14,7 +14,6 @@
     <string name="error_unsupported">Dieser Link wird noch nicht unterstützt</string>
     <string name="error_playback">Das Video konnte nicht abgespielt werden</string>
     <string name="crash_title">Orvid wurde beim letzten Mal beendet</string>
-    <string name="crash_saved">Ein Absturzbericht wurde in Download/Orvid/tmp gespeichert.</string>
     <string name="crash_share">Teilen</string>
     <string name="tor_banner_starting">Verbindung mit Tor… %d%%</string>
     <string name="tor_banner_failed">Tor ist nicht verbunden. Bis dahin wird nichts gesendet. Tippen zum Wiederholen.</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">Durchsucht %1$d Quellen</string>
     <string name="health_skipped">antwortet nicht, übersprungen</string>
     <string name="tor_off_only">Funktioniert nur, wenn Tor aus ist</string>
+    <string name="tor_playback_blocked">Videowiedergabe über Tor blockiert</string>
     <string name="health_down">Antwortet nicht. Zum erneuten Versuch aus- und einschalten.</string>
     <string name="health_flaky">Hatte bei den letzten Suchen Probleme</string>
+    <string name="health_limited">Zu viele Anfragen von diesem Tor-Ausgang. 15 Minuten Pause.</string>
     <string name="health_empty">Hat noch keine Ergebnisse geliefert</string>
     <string name="play_next">Als Nächstes abspielen</string>
     <string name="add_queue">Zur Warteschlange</string>

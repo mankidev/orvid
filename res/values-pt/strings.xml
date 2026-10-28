@@ -14,7 +14,6 @@
     <string name="error_unsupported">Este link ainda não é compatível</string>
     <string name="error_playback">Não foi possível reproduzir o vídeo</string>
     <string name="crash_title">O Orvid parou da última vez</string>
-    <string name="crash_saved">Um relatório de erro foi salvo em Download/Orvid/tmp.</string>
     <string name="crash_share">Compartilhar</string>
     <string name="tor_banner_starting">Conectando ao Tor… %d%%</string>
     <string name="tor_banner_failed">O Tor não está conectado. Nada é enviado até que esteja. Toque para tentar de novo.</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">Buscando em %1$d fontes</string>
     <string name="health_skipped">não responde, ignorado</string>
     <string name="tor_off_only">Só funciona com o Tor desligado</string>
+    <string name="tor_playback_blocked">A reprodução de vídeo está bloqueada pelo Tor</string>
     <string name="health_down">Não responde. Desligue e ligue para tentar de novo.</string>
     <string name="health_flaky">Teve problemas nas últimas pesquisas</string>
+    <string name="health_limited">Pedidos demais a partir desta saída do Tor. Em pausa por 15 minutos.</string>
     <string name="health_empty">Ainda não retornou nenhum resultado</string>
     <string name="play_next">Tocar a seguir</string>
     <string name="add_queue">Adicionar à fila</string>

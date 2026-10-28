@@ -38,7 +38,7 @@ https://raw.githubusercontent.com/mankidev/orvid-sources/main/
 
 [orvid-sources](https://github.com/mankidev/orvid-sources) explains the source format, so you can write sources for other sites.
 
-To also search with DuckDuckGo and Yandex, add `https://raw.githubusercontent.com/mankidev/orvid-search/main/`. Search engines block Tor, so these two work only with Tor turned off, and then they see your IP address and your search.
+orvid-sources also holds DuckDuckGo and Yandex video search. Search engines block Tor, so these two work only with Tor turned off, and then they see your IP address and your search.
 
 ## Download
 

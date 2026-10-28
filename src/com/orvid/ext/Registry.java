@@ -67,6 +67,8 @@ public final class Registry {
         }
         ranks = Collections.unmodifiableMap(rank);
         out.sort((a, b) -> a.adult != b.adult ? (a.adult ? 1 : -1) : Integer.compare(rank(a.key), rank(b.key)));
+        java.util.Set<String> loadedKeys = new java.util.HashSet<>();
+        out.removeIf(s -> !loadedKeys.add(s.key));
         sources = Collections.unmodifiableList(out);
         engines = Collections.unmodifiableSet(on);
         loaded = true;
@@ -148,6 +150,7 @@ public final class Registry {
         s.browse = d.getBoolean("browse", false);
         s.portal = portal;
         s.torless = d.getBoolean("torless", false);
+        s.torPlayback = d.getBoolean("torPlayback", true);
         return s;
     }
 

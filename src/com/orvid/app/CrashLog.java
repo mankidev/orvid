@@ -5,14 +5,12 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Build;
 
 import com.orvid.R;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.io.StringWriter;
@@ -50,10 +48,9 @@ public final class CrashLog {
         final String report = read(f);
         f.delete();
         if (report == null) return;
-        boolean saved = saveToDownloads(activity, report);
         new AlertDialog.Builder(activity, R.style.AppDialog)
             .setTitle(R.string.crash_title)
-            .setMessage(saved ? activity.getString(R.string.crash_saved) : report)
+            .setMessage(report)
             .setPositiveButton(R.string.ok, null)
             .setNeutralButton(R.string.crash_share, new DialogInterface.OnClickListener() {
                 @Override
@@ -68,23 +65,6 @@ public final class CrashLog {
 
     private static File file(Context context) {
         return new File(context.getFilesDir(), "crash.txt");
-    }
-
-    private static boolean saveToDownloads(Context context, String body) {
-        if (Build.VERSION.SDK_INT < 29) return false;
-        try {
-            Uri uri = TempLogs.create(context, "orvid-crash");
-            if (uri == null) return false;
-            OutputStream out = context.getContentResolver().openOutputStream(uri);
-            try {
-                out.write(body.getBytes("UTF-8"));
-            } finally {
-                out.close();
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private static String read(File f) {

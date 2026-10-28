@@ -46,12 +46,8 @@ public final class WebSites {
             "jable\\.tv/videos/[a-z0-9-]+/");
     public static final Site MISSAV = new Site(133, "MissAV", "https://missav.ws/en/search/{qs}",
             "https://missav.ws/en/search/{qs}?page={p}", "missav\\.ws/(?:dm\\d+/)?(?:[a-z]{2}(?:-[a-z]+)?/)?[a-z]{2,6}-\\d{2,5}");
-    public static final Site ASHEMALETUBE = new Site(134, "aShemaleTube", "https://www.ashemaletube.com/search/?q={q}",
-            "https://www.ashemaletube.com/search/?q={q}&page={p}", "ashemaletube\\.com/videos/\\d+/");
-    public static final Site BOYFRIENDTV = new Site(135, "BoyfriendTV", "https://www.boyfriendtv.com/search/?q={q}",
-            "https://www.boyfriendtv.com/search/?q={q}&page={p}", "boyfriendtv\\.com/videos/\\d+/");
 
-    public static final Site[] ALL = {SPANKBANG, FOURKPORN, JABLE, MISSAV, ASHEMALETUBE, BOYFRIENDTV};
+    public static final Site[] ALL = {SPANKBANG, FOURKPORN, JABLE, MISSAV};
 
     private WebSites() {
     }

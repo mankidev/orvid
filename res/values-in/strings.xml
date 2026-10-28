@@ -14,7 +14,6 @@
     <string name="error_unsupported">Tautan ini belum didukung</string>
     <string name="error_playback">Video tidak dapat diputar</string>
     <string name="crash_title">Orvid berhenti terakhir kali</string>
-    <string name="crash_saved">Laporan error disimpan di Download/Orvid/tmp.</string>
     <string name="crash_share">Bagikan</string>
     <string name="tor_banner_starting">Menghubungkan ke Tor… %d%%</string>
     <string name="tor_banner_failed">Tor tidak terhubung. Tidak ada yang dikirim sampai terhubung. Ketuk untuk mencoba lagi.</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">Mencari di %1$d sumber</string>
     <string name="health_skipped">tidak merespons, dilewati</string>
     <string name="tor_off_only">Hanya berfungsi saat Tor mati</string>
+    <string name="tor_playback_blocked">Pemutaran video diblokir lewat Tor</string>
     <string name="health_down">Tidak merespons. Matikan lalu nyalakan untuk mencoba lagi.</string>
     <string name="health_flaky">Bermasalah dalam pencarian terakhir</string>
+    <string name="health_limited">Terlalu banyak permintaan dari exit Tor ini. Dijeda selama 15 menit.</string>
     <string name="health_empty">Belum pernah memberi hasil</string>
     <string name="play_next">Putar berikutnya</string>
     <string name="add_queue">Tambah ke antrean</string>

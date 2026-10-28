@@ -21,6 +21,7 @@ public final class Session {
     public static String avatar;
     public static String circuit;
     public static String relatedToken;
+    public static String seed;
     public static com.orvid.yt.Visionos.Video video;
     public static Direct direct;
     public static Frames storyboard;

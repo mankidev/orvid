@@ -42,7 +42,11 @@ final class Imgur extends Site {
             p.items.add(item);
         }
         if (!data.isEmpty()) p.next = Integer.toString(page + 1);
-        durations(p.items, DURATION_BUDGET_MS, item -> mp4Seconds(circuit, mp4.get(item)));
+        dropUnreachable(p.items, mp4);
+        if (page == 0) {
+            durations(p.items, DURATION_BUDGET_MS, item -> mp4Seconds(circuit, mp4.get(item)));
+            dropUnreachable(p.items, mp4);
+        }
         return p;
     }
 

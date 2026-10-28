@@ -13,8 +13,7 @@ import java.util.regex.Pattern;
 
 final class OkRu extends Site {
 
-    private static final String MOBILE = "Mozilla/5.0 (Android 14; Mobile; rv:140.0) Gecko/140.0 Firefox/140.0";
-    private static final Pattern RESULTS = Pattern.compile("<video-search-results[^>]*\\svideos=\"([^\"]+)\"");
+    private static final Pattern RESULTS = Pattern.compile("<video-search-result\\b[^>]*\\sdata-props=\"([^\"]+)\"");
     private static final Pattern OPTIONS = Pattern.compile("data-options=\"([^\"]+)\"");
 
     OkRu() {
@@ -23,17 +22,17 @@ final class OkRu extends Site {
 
     @Override
     public Source.Page search(String circuit, String query, String next) throws IOException {
-        String html = text(circuit, "https://m.ok.ru/video/search?st.query=" + enc(query), null, null, "User-Agent", MOBILE);
+        String html = text(circuit, "https://ok.ru/video/search/" + enc(query).replace("+", "%20"), null, null);
         Matcher m = RESULTS.matcher(html);
         Source.Page p = new Source.Page();
         if (!m.find()) return p;
-        JsonArray data = parse(unescape(m.group(1))).getObject("table").getArray("data");
-        for (int i = 0; i < data.size(); i++) {
-            JsonObject v = data.getObject(i);
+        JsonArray list = parse(unescape(m.group(1))).getObject("videos").getArray("list");
+        for (int i = 0; i < list.size(); i++) {
+            JsonObject v = list.getObject(i).getObject("movie");
             String id = v.getString("id", null);
-            if (id == null || v.getInt("accessRights", 0) != 0) continue;
-            p.items.add(item("https://ok.ru/video/" + id, v.getString("name", ""), v.getString("ownerName", ""),
-                    v.getLong("duration", -1) / 1000, v.getLong("totalViews", -1), v.getObject("thumbnails").getString("HIGH", null)));
+            if (id == null || v.getBoolean("blocked", false)) continue;
+            p.items.add(item("https://ok.ru/video/" + id, v.getString("title", ""), "",
+                    v.getLong("duration", -1) / 1000, v.getLong("totalViews", -1), v.getObject("thumbnail").getString("big", null)));
         }
         return p;
     }

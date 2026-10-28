@@ -130,7 +130,7 @@ public final class Ui {
         if (picked == null) return null;
         java.util.regex.Matcher m = YT_THUMB.matcher(picked);
         if (!m.find()) return picked;
-        return targetWidth > 480 ? "https://i.ytimg.com/vi_webp/" + m.group(1) + "/hq720.webp"
+        return targetWidth > 640 ? "https://i.ytimg.com/vi_webp/" + m.group(1) + "/hq720.webp"
                 : "https://i.ytimg.com/vi/" + m.group(1) + "/hqdefault.jpg";
     }
 

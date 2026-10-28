@@ -235,6 +235,10 @@ public final class Filters {
         int need = keys.size() <= 2 ? keys.size() : (int) Math.ceil(keys.size() * 0.6);
         List<StreamInfoItem> out = new ArrayList<>();
         for (StreamInfoItem item : ranked) {
+            if (Ranker.vouched(item)) {
+                out.add(item);
+                continue;
+            }
             String title = Query.fold(item.getName() == null ? "" : item.getName());
             boolean phrases = true;
             for (String ph : q.phrases) phrases &= title.contains(Query.fold(ph));

@@ -14,7 +14,6 @@
     <string name="error_unsupported">هذا الرابط غير مدعوم بعد</string>
     <string name="error_playback">تعذر تشغيل الفيديو</string>
     <string name="crash_title">توقف Orvid في المرة الماضية</string>
-    <string name="crash_saved">حُفظ تقرير الأعطال في Download/Orvid/tmp.</string>
     <string name="crash_share">مشاركة</string>
     <string name="tor_banner_starting">جارٍ الاتصال بـ Tor… %d%%</string>
     <string name="tor_banner_failed">Tor غير متصل. لن يُرسل أي شيء حتى يتصل. انقر لإعادة المحاولة.</string>
@@ -143,8 +142,10 @@
     <string name="trace_running">جارٍ البحث في %1$d مصدر</string>
     <string name="health_skipped">لا يستجيب، تم التخطي</string>
     <string name="tor_off_only">يعمل فقط عند إيقاف Tor</string>
+    <string name="tor_playback_blocked">تشغيل الفيديو محظور عبر Tor</string>
     <string name="health_down">لا يستجيب. أوقفه وشغّله لإعادة المحاولة.</string>
     <string name="health_flaky">واجه مشاكل في عمليات البحث الأخيرة</string>
+    <string name="health_limited">طلبات كثيرة جدًا من مخرج Tor هذا. متوقف لمدة 15 دقيقة.</string>
     <string name="health_empty">لم يُرجع أي نتائج حتى الآن</string>
     <string name="play_next">تشغيل التالي</string>
     <string name="add_queue">إضافة إلى قائمة الانتظار</string>

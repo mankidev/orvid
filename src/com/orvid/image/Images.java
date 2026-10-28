@@ -425,11 +425,22 @@ public final class Images {
     private static final java.util.regex.Pattern MZ_SQUARE =
             java.util.regex.Pattern.compile("/\\d+x\\d+bb\\.(?:jpg|webp|png)$");
     private static final java.util.regex.Pattern TWIMG_MEDIA =
-            java.util.regex.Pattern.compile("^https://pbs\\.twimg\\.com/(?:ext_tw_video_thumb|amplify_video_thumb|tweet_video_thumb|media)/[^?]+\\.jpg$");
+            java.util.regex.Pattern.compile("^(https://pbs\\.twimg\\.com/(?:ext_tw_video_thumb|amplify_video_thumb|tweet_video_thumb|media)/[^?]+?)(?:\\.(?:jpg|png|webp))?$");
+    private static final java.util.regex.Pattern HDSLB =
+            java.util.regex.Pattern.compile("^https://i\\d\\.hdslb\\.com/bfs/[^@?]+\\.(?:jpg|png|webp)$");
+    private static final java.util.regex.Pattern PLUTO =
+            java.util.regex.Pattern.compile("^https://images\\.pluto\\.tv/.*[?&]w=\\d+.*");
 
     private static String sized(String url, int targetWidth) {
         boolean small = targetWidth <= 400;
-        if (TWIMG_MEDIA.matcher(url).matches()) return url + "?format=jpg&name=900x900";
+        java.util.regex.Matcher tw = TWIMG_MEDIA.matcher(url);
+        if (tw.matches()) return tw.group(1) + "?format=jpg&name=" + (targetWidth <= 680 ? "small" : "900x900");
+        if (HDSLB.matcher(url).matches()) return url + (small ? "@320w_180h_1c.jpg" : "@640w_360h_1c.jpg");
+        if (PLUTO.matcher(url).matches() && targetWidth <= SITE_WIDE) {
+            int w = small ? 320 : 640;
+            return url.replaceAll("([?&])w=\\d+", "$1w=" + w).replaceAll("([?&])h=\\d+", "$1h=" + w * 9 / 16)
+                    .replaceAll("([?&])q=\\d+", "$1q=60");
+        }
         if (url.contains(".coub.com/") && url.contains("/big_") && targetWidth <= SITE_WIDE) {
             return url.replace("/big_", small ? "/small_" : "/med_");
         }

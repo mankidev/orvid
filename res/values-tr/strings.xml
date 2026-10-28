@@ -14,7 +14,6 @@
     <string name="error_unsupported">Bu link henüz desteklenmiyor</string>
     <string name="error_playback">Video oynatılamadı</string>
     <string name="crash_title">Orvid geçen sefer kapandı</string>
-    <string name="crash_saved">Hata raporu Download/Orvid/tmp klasörüne kaydedildi.</string>
     <string name="crash_share">Paylaş</string>
     <string name="tor_banner_starting">Tor\'a bağlanıyor… %%%d</string>
     <string name="tor_banner_failed">Tor bağlı değil. Bağlanana kadar hiçbir istek gönderilmez. Tekrar denemek için dokun.</string>
@@ -145,8 +144,10 @@
     <string name="trace_running">%1$d kaynakta aranıyor</string>
     <string name="health_skipped">yanıt vermiyor, atlandı</string>
     <string name="tor_off_only">Sadece Tor kapalıyken çalışır</string>
+    <string name="tor_playback_blocked">Tor\'da video oynatma engelli</string>
     <string name="health_down">Yanıt vermiyor. Yeniden denemek için kapatıp açın.</string>
     <string name="health_flaky">Son aramalarda sorun çıkardı</string>
+    <string name="health_limited">Bu Tor çıkışından çok fazla istek gitti. 15 dakika duraklatıldı.</string>
     <string name="health_empty">Henüz hiç sonuç vermedi</string>
     <string name="play_next">Sırada oynat</string>
     <string name="add_queue">Sıraya ekle</string>
