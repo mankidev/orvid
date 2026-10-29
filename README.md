@@ -22,7 +22,7 @@ Orvid's goal is one private search box for videos from across the web. Any site 
 
 | | Orvid | NewPipe + Orbot |
 |---|---|---|
-| Sources | 130+ | 5 |
+| Sources | 250+ | 5 |
 | Enter to result list | 1.9 s | 7.1 s |
 | Enter to first 8 thumbnails | 6.9 s | 10.1 s |
 | First video frame | 7.0 s | 18.0 s |
