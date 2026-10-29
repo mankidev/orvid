@@ -30,6 +30,7 @@ public final class Query {
     public final List<String> excluded = new ArrayList<>();
     public final List<String> required = new ArrayList<>();
     public final List<String> inTitle = new ArrayList<>();
+    public final java.util.Map<String, Integer> repeats = new java.util.HashMap<>();
     public String plainQuery;
     public boolean movie;
     public boolean anyOf;
@@ -170,7 +171,9 @@ public final class Query {
                 q.movie = true;
                 continue;
             }
-            if (!STOP.contains(w) && !q.excluded.contains(w) && !q.terms.contains(w)) q.terms.add(w);
+            if (STOP.contains(w) || q.excluded.contains(w)) continue;
+            if (q.terms.contains(w)) q.repeats.merge(w, 2, (old, one) -> old + 1);
+            else q.terms.add(w);
         }
         return q;
     }

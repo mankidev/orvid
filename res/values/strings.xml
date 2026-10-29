@@ -143,6 +143,7 @@
     <string name="trace_failed">failed: %1$s</string>
     <string name="trace_summary">%1$d sources searched in %2$s s</string>
     <string name="trace_copied">Search log copied</string>
+    <string name="debug_copied">Debug log copied</string>
     <string name="trace_running">Searching %1$d sources</string>
     <string name="health_skipped">not responding, skipped</string>
     <string name="tor_off_only">Works only when Tor is off</string>

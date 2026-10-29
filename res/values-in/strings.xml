@@ -139,6 +139,7 @@
     <string name="trace_failed">gagal: %1$s</string>
     <string name="trace_summary">%1$d sumber dicari dalam %2$s dtk</string>
     <string name="trace_copied">Log pencarian disalin</string>
+    <string name="debug_copied">Log debug disalin</string>
     <string name="trace_running">Mencari di %1$d sumber</string>
     <string name="health_skipped">tidak merespons, dilewati</string>
     <string name="tor_off_only">Hanya berfungsi saat Tor mati</string>

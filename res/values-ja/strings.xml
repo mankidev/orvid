@@ -139,6 +139,7 @@
     <string name="trace_failed">失敗: %1$s</string>
     <string name="trace_summary">%1$d 個のソースを %2$s 秒で検索</string>
     <string name="trace_copied">検索ログをコピーしました</string>
+    <string name="debug_copied">デバッグログをコピーしました</string>
     <string name="trace_running">%1$d 個のソースを検索中</string>
     <string name="health_skipped">応答なし、スキップ</string>
     <string name="tor_off_only">Tor がオフのときだけ使えます</string>

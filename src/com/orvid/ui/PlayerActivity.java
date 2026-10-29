@@ -65,7 +65,6 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.io.ByteArrayInputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -158,13 +157,13 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     private String pageUrl;
     private String videoId;
     private String circuit;
-    private Uri liveUri;
     private boolean firstFrame;
-    private final Runnable saveLive = this::saveDiag;
+    private android.view.GestureDetector debugHold;
 
     @Override
     public boolean dispatchTouchEvent(android.view.MotionEvent e) {
         if (panic.feed(this, e)) return true;
+        if (debugHold != null) debugHold.onTouchEvent(e);
         return super.dispatchTouchEvent(e);
     }
 
@@ -185,6 +184,16 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         details = findViewById(R.id.details);
         buffering = findViewById(R.id.buffering);
         debug = findViewById(R.id.debug);
+        debugHold = new android.view.GestureDetector(this, new android.view.GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public void onLongPress(android.view.MotionEvent e) {
+                if (debug.getVisibility() != View.VISIBLE) return;
+                int[] at = new int[2];
+                debug.getLocationOnScreen(at);
+                float x = e.getRawX() - at[0], y = e.getRawY() - at[1];
+                if (x >= 0 && y >= 0 && x < debug.getWidth() && y < debug.getHeight()) copyDiag();
+            }
+        });
         subtitle = findViewById(R.id.subtitle);
 
         header = LayoutInflater.from(this).inflate(R.layout.header_player, details, false);
@@ -241,8 +250,6 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         Diag.listen(() -> debug.post(() -> {
             if (!debugOn()) return;
             debug.setText(Diag.tail(14));
-            debug.removeCallbacks(saveLive);
-            debug.postDelayed(saveLive, 700);
         }));
         applyDebug();
 
@@ -2589,23 +2596,20 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         debug.setVisibility(on ? View.VISIBLE : View.GONE);
         if (on) {
             debug.setText(Diag.tail(14));
-            saveDiag();
         }
     }
 
-    private void saveDiag() {
-        if (Build.VERSION.SDK_INT < 29 || !debugOn()) return;
-        byte[] body = Diag.dump().getBytes(StandardCharsets.UTF_8);
-        try {
-            if (liveUri == null) {
-                liveUri = com.orvid.app.TempLogs.create(this, "orvid-debug");
-                if (liveUri == null) return;
-            }
-            try (OutputStream out = getContentResolver().openOutputStream(liveUri, "wt")) {
-                out.write(body);
-            }
-        } catch (Exception ignored) {
+    private void copyDiag() {
+        android.content.ClipData clip = android.content.ClipData.newPlainText("Orvid", Diag.dump());
+        if (Build.VERSION.SDK_INT >= 33) {
+            android.os.PersistableBundle extras = new android.os.PersistableBundle();
+            extras.putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true);
+            clip.getDescription().setExtras(extras);
         }
+        android.content.ClipboardManager cm = getSystemService(android.content.ClipboardManager.class);
+        if (cm == null) return;
+        cm.setPrimaryClip(clip);
+        android.widget.Toast.makeText(this, R.string.debug_copied, android.widget.Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -2651,8 +2655,6 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         com.orvid.net.Focus.hold(false);
         cancelUpNext();
         Diag.listen(null);
-        debug.removeCallbacks(saveLive);
-        saveDiag();
         stage.removeCallbacks(sampler);
         stage.removeCallbacks(stallWatch);
         controls.release();

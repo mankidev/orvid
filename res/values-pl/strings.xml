@@ -139,6 +139,7 @@
     <string name="trace_failed">błąd: %1$s</string>
     <string name="trace_summary">przeszukano %1$d źródeł w %2$s s</string>
     <string name="trace_copied">Skopiowano dziennik wyszukiwania</string>
+    <string name="debug_copied">Skopiowano dziennik debugowania</string>
     <string name="trace_running">Przeszukuje źródła: %1$d</string>
     <string name="health_skipped">nie odpowiada, pominięto</string>
     <string name="tor_off_only">Działa tylko przy wyłączonym Torze</string>

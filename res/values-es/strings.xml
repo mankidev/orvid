@@ -139,6 +139,7 @@
     <string name="trace_failed">error: %1$s</string>
     <string name="trace_summary">%1$d fuentes buscadas en %2$s s</string>
     <string name="trace_copied">Registro de búsqueda copiado</string>
+    <string name="debug_copied">Registro de depuración copiado</string>
     <string name="trace_running">Buscando en %1$d fuentes</string>
     <string name="health_skipped">no responde, omitido</string>
     <string name="tor_off_only">Solo funciona con Tor desactivado</string>

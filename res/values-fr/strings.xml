@@ -139,6 +139,7 @@
     <string name="trace_failed">échec : %1$s</string>
     <string name="trace_summary">%1$d sources parcourues en %2$s s</string>
     <string name="trace_copied">Journal de recherche copié</string>
+    <string name="debug_copied">Journal de débogage copié</string>
     <string name="trace_running">Recherche dans %1$d sources</string>
     <string name="health_skipped">ne répond pas, ignoré</string>
     <string name="tor_off_only">Fonctionne uniquement quand Tor est désactivé</string>

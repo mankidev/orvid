@@ -31,6 +31,8 @@ public final class Ranker {
     private static final long FEW_VIEWS = 1000;
     private static final double FEW_VIEWS_PENALTY = 3.0;
     private static final double EXACT_CHANNEL = 6.0;
+    private static final double EXACT_TITLE = 5.0;
+    private static final java.util.regex.Pattern TITLE_PARTS = java.util.regex.Pattern.compile("[-|:/()\\[\\]\"\u2013\u2014\u2022\u300c\u300d\u300e\u300f\u3010\u3011~]+");
 
     private static String compact(String folded) {
         return folded.replaceAll("[^\\p{L}\\p{N}]+", "");
@@ -94,7 +96,7 @@ public final class Ranker {
                 StreamInfoItem item = list.get(rank);
                 double s = score(q, ctx, item, rank, weights[src]);
                 if (strictOnly && !mentions(q, item)) s = Double.NEGATIVE_INFINITY;
-                boolean partial = literal && q.terms.size() > 1 && mentions(q, item) && coverage(q, item) < required(q);
+                boolean partial = literal && (q.terms.size() > 1 || !q.repeats.isEmpty()) && mentions(q, item) && coverage(q, item) < required(q);
                 if (literal && s >= 0 && (!mentions(q, item) || partial)) s = LOOSE;
                 com.orvid.app.DevInfo.rank(item, src, rank, s);
                 if (s >= 0) {
@@ -128,10 +130,14 @@ public final class Ranker {
         List<StreamInfoItem> withTail = new ArrayList<>(head);
         for (int r = 0; ; r++) {
             boolean more = false;
-            for (List<Scored> list : looseBySource) {
+            for (int k = 0; k < looseBySource.size(); k++) {
+                List<Scored> list = looseBySource.get(k);
                 if (r >= list.size()) continue;
                 more = true;
-                if (!list.get(r).partial && !taken.contains(list.get(r).item)) withTail.add(list.get(r).item);
+                StreamInfoItem item = list.get(r).item;
+                boolean byTags = tagged != null && k < tagged.length && tagged[k];
+                if (weights[k] < 1 && !byTags && !q.terms.isEmpty() && !mentions(q, item)) continue;
+                if (!list.get(r).partial && !taken.contains(item)) withTail.add(item);
             }
             if (!more) break;
         }
@@ -183,8 +189,19 @@ public final class Ranker {
         List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
         int n = 0;
         for (String t : q.terms) {
-            if (contains(words, t) || contains(channel, t) || Query.acronym(t, words) || Source.about(t, item)) n++;
+            Integer times = q.repeats.get(t);
+            if (times != null) {
+                if (occurrences(words, t) >= times) n++;
+            } else if (contains(words, t) || contains(channel, t) || Query.acronym(t, words) || Source.about(t, item)) {
+                n++;
+            }
         }
+        return n;
+    }
+
+    private static int occurrences(List<String> words, String term) {
+        int n = 0;
+        for (String w : words) if (Query.wordMatches(term, w)) n++;
         return n;
     }
 
@@ -503,6 +520,7 @@ public final class Ranker {
             if (matched == q.terms.size()) s += 3;
             String joined = String.join(" ", q.terms);
             if (q.terms.size() > 1 && title.contains(joined)) s += 4;
+            if (exactPart(q, item.getName())) s += EXACT_TITLE;
         }
         boolean offTopic = q.terms.size() <= AMBIGUOUS_TERMS && !ctx.topicShare.isEmpty() && topicHits == 0 && strongest >= STRONG_TOPIC;
         if (!q.terms.isEmpty() && !offTopic && compact(channel).equals(String.join("", q.terms))) s += EXACT_CHANNEL;
@@ -521,6 +539,19 @@ public final class Ranker {
             if (share >= MIXED_SCRIPT_SHARE) s = Math.max(0, s - FOREIGN_SCRIPT * Math.min(1, share * 2));
         }
         return s;
+    }
+
+    static boolean exactPart(Query q, String name) {
+        if (name == null || q.plainQuery == null) return false;
+        List<String> want = new ArrayList<>();
+        for (String w : Query.words(Query.fold(q.plainQuery))) if (!Query.isStop(w)) want.add(w);
+        if (want.isEmpty()) return false;
+        for (String part : TITLE_PARTS.split(Query.fold(name))) {
+            List<String> got = new ArrayList<>();
+            for (String w : Query.words(part)) if (!TITLE_NOISE.contains(w) && !Query.isStop(w)) got.add(w);
+            if (got.equals(want)) return true;
+        }
+        return false;
     }
 
     private static boolean contains(List<String> words, String term) {

@@ -139,6 +139,7 @@
     <string name="trace_failed">실패: %1$s</string>
     <string name="trace_summary">%2$s초 동안 소스 %1$d개 검색</string>
     <string name="trace_copied">검색 기록을 복사했습니다</string>
+    <string name="debug_copied">디버그 기록을 복사했습니다</string>
     <string name="trace_running">소스 %1$d개 검색 중</string>
     <string name="health_skipped">응답 없음, 건너뜀</string>
     <string name="tor_off_only">Tor가 꺼져 있을 때만 작동합니다</string>

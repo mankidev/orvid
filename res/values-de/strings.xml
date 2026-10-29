@@ -139,6 +139,7 @@
     <string name="trace_failed">Fehler: %1$s</string>
     <string name="trace_summary">%1$d Quellen in %2$s s durchsucht</string>
     <string name="trace_copied">Suchprotokoll kopiert</string>
+    <string name="debug_copied">Debug-Protokoll kopiert</string>
     <string name="trace_running">Durchsucht %1$d Quellen</string>
     <string name="health_skipped">antwortet nicht, übersprungen</string>
     <string name="tor_off_only">Funktioniert nur, wenn Tor aus ist</string>

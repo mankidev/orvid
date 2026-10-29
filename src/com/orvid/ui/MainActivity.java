@@ -278,6 +278,8 @@ public final class MainActivity extends Activity implements Tor.Listener {
                     }
                 }
                 scheduleSuggest(text);
+                field.removeCallbacks(typedGuess);
+                field.postDelayed(typedGuess, TYPED_GUESS_MS);
             }
         });
         field.setOnEditorActionListener((v, actionId, event) -> {
@@ -591,7 +593,9 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
         final java.util.concurrent.Future<Hedge.Result<Search.Page>> guessed = takeGuess(q, f);
         final boolean blank = input.trim().isEmpty();
+        youtubeAwaited = false;
         if (!blank && q.siteIs("youtube", "YouTube") && f.youtube && com.orvid.ext.Registry.engineOn("youtube")) {
+            youtubeAwaited = true;
             pendingSources++;
             jobs.add(queued(0, 0, 0, () -> {
                 try {
@@ -1228,6 +1232,8 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private static final long EXTRA_HEDGE_MS = 0;
 
     private static final long SETTLE_MS = 1500;
+    private static final long YOUTUBE_WAIT_MS = 1500;
+    private boolean youtubeAwaited;
     private long settleUntil;
     private List<List<StreamInfoItem>> arrived;
     private boolean shown;
@@ -1235,6 +1241,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     private void deliver(int generation, Query q, Filters f, int source, List<StreamInfoItem> items) {
         if (generation != searchGeneration) return;
+        if (source == 0) youtubeAwaited = false;
         Diag.mark("src " + traceName(source) + " " + items.size() + " items");
         devStatus(source, items.size() + " " + (android.os.SystemClock.uptimeMillis() - searchStarted) / 100 / 10.0 + "s");
         traceSet(generation, source, getString(R.string.trace_results, items.size()), true);
@@ -1317,23 +1324,22 @@ public final class MainActivity extends Activity implements Tor.Listener {
     }
 
     private void applyRanked(List<StreamInfoItem> ranked) {
-        if (shown && !settling()) {
+        if (shown) {
             mergeTail(ranked);
             return;
         }
         if (ranked.isEmpty() && pendingSources > 0) return;
-        if (shown) {
-            Diag.mark("settle " + ranked.size() + " items");
-            adapter.set(ranked);
-            com.orvid.play.Session.lastSearch = new ArrayList<>(ranked);
-            stopPrepare();
-            list.postDelayed(prepareVisible, PREPARE_IDLE_MS);
+        long waited = android.os.SystemClock.uptimeMillis() - searchStarted;
+        if (youtubeAwaited && waited < YOUTUBE_WAIT_MS) {
+            final int generation = searchGeneration;
+            list.postDelayed(() -> {
+                if (generation == searchGeneration && !shown) requestRank(generation, true);
+            }, YOUTUBE_WAIT_MS - waited);
             return;
         }
         shown = true;
         settleUntil = android.os.SystemClock.uptimeMillis() + SETTLE_MS;
         Diag.mark("first paint " + ranked.size() + " items");
-        saveSearchLog();
         scheduleSecondWave(searchGeneration);
         adapter.set(ranked);
         com.orvid.play.Session.lastSearch = new ArrayList<>(ranked);
@@ -1440,6 +1446,10 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     private void sourceFailed(int generation, int source, Exception e) {
         if (generation != searchGeneration) return;
+        if (source == 0) {
+            youtubeAwaited = false;
+            requestRank(generation, true);
+        }
         String why = e == null ? null : e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         Diag.mark("src " + traceName(source) + (why == null ? " skipped" : " FAIL " + why));
         devStatus(source, why == null ? "skipped" : "FAIL " + (why.length() > 40 ? why.substring(0, 40) : why));
@@ -1454,29 +1464,12 @@ public final class MainActivity extends Activity implements Tor.Listener {
         finishIfDone();
     }
 
-    private android.net.Uri searchLog;
     private boolean searchLogged;
-
-    private void saveSearchLog() {
-        if (!com.orvid.app.DevInfo.on || android.os.Build.VERSION.SDK_INT < 29) return;
-        byte[] body = Diag.dump().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        PARALLEL.execute(() -> {
-            try {
-                if (searchLog == null) searchLog = com.orvid.app.TempLogs.create(this, "orvid-search");
-                if (searchLog == null) return;
-                try (java.io.OutputStream out = getContentResolver().openOutputStream(searchLog, "wt")) {
-                    out.write(body);
-                }
-            } catch (Exception ignored) {
-            }
-        });
-    }
 
     private void finishIfDone() {
         if (pendingSources <= 0 && !searchLogged && searched) {
             searchLogged = true;
             Diag.mark("search done");
-            saveSearchLog();
         }
         if (!deferred.isEmpty() && pendingSources <= deferred.size()) releaseDeferred();
         if (pendingSources <= 0) judgeHealth();
@@ -1927,14 +1920,23 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private String guessCircuit;
     private List<String> lastSuggestions = new ArrayList<>();
     private static final long GUESS_LIFE_MS = 120000;
-    private final java.util.Map<String, Guess> guesses = new java.util.HashMap<>();
+    private static final long TYPED_GUESS_MS = 300;
+    private final java.util.Map<String, Guess> guesses = new java.util.LinkedHashMap<>();
+    private final Runnable typedGuess = () -> {
+        String text = field.getText().toString().trim();
+        if (text.length() < 2 || !field.hasFocus() || com.orvid.search.Source.adultUnlocked
+                || !com.orvid.ext.Registry.engineOn("youtube")) return;
+        startGuess(text, true);
+    };
 
     private static final class Guess {
         final java.util.concurrent.Future<Hedge.Result<Search.Page>> page;
         final long at = android.os.SystemClock.uptimeMillis();
+        final boolean typed;
 
-        Guess(java.util.concurrent.Future<Hedge.Result<Search.Page>> page) {
+        Guess(java.util.concurrent.Future<Hedge.Result<Search.Page>> page, boolean typed) {
             this.page = page;
+            this.typed = typed;
         }
     }
 
@@ -1942,14 +1944,27 @@ public final class MainActivity extends Activity implements Tor.Listener {
         if (found.isEmpty() || !filters.youtube) return;
         String guess = found.get(0);
         for (String s : found) if (Query.fold(s).equals(Query.fold(typed))) guess = s;
+        startGuess(guess, false);
+    }
+
+    private static String guessKey(Query q, String params) {
+        return Query.fold(q.platformQuery) + "\n" + params;
+    }
+
+    private void startGuess(String guess, boolean typed) {
+        if (!filters.youtube) return;
         Query q = Query.parse(guess);
         if (!q.siteIs("youtube", "YouTube")) return;
         String params = filters.youtubeParams();
-        String key = q.platformQuery + "\n" + params;
+        String key = guessKey(q, params);
         if (guesses.containsKey(key)) return;
-        for (Guess old : guesses.values()) old.page.cancel(true);
-        guesses.clear();
-        Diag.mark("guess ahead: " + guess);
+        for (java.util.Iterator<Guess> it = guesses.values().iterator(); it.hasNext(); ) {
+            Guess old = it.next();
+            if (old.typed != typed) continue;
+            old.page.cancel(true);
+            it.remove();
+        }
+        Diag.mark("guess ahead" + (typed ? " typed: " : ": ") + guess);
         if (guessCircuit == null) guessCircuit = Visionos.takeCircuit();
         final String lane = guessCircuit;
         guesses.put(key, new Guess(PARALLEL.submit(() -> {
@@ -1960,11 +1975,12 @@ public final class MainActivity extends Activity implements Tor.Listener {
                 adapter.prefetch(r.value.items, GUESS_THUMBS, true);
             });
             return r;
-        })));
+        }), typed));
     }
 
     private java.util.concurrent.Future<Hedge.Result<Search.Page>> takeGuess(Query q, Filters f) {
-        Guess g = guesses.remove(q.platformQuery + "\n" + f.youtubeParams());
+        field.removeCallbacks(typedGuess);
+        Guess g = guesses.remove(guessKey(q, f.youtubeParams()));
         java.util.List<String> other = new ArrayList<>();
         for (String k : guesses.keySet()) other.add(k.substring(0, k.indexOf('\n')));
         for (Guess old : guesses.values()) old.page.cancel(true);

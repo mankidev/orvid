@@ -139,6 +139,7 @@
     <string name="trace_failed">失败：%1$s</string>
     <string name="trace_summary">%2$s 秒内搜索了 %1$d 个来源</string>
     <string name="trace_copied">已复制搜索日志</string>
+    <string name="debug_copied">已复制调试日志</string>
     <string name="trace_running">正在搜索 %1$d 个来源</string>
     <string name="health_skipped">无响应，已跳过</string>
     <string name="tor_off_only">仅在关闭 Tor 时可用</string>

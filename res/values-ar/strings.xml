@@ -139,6 +139,7 @@
     <string name="trace_failed">فشل: %1$s</string>
     <string name="trace_summary">تم البحث في %1$d مصدر خلال %2$s ث</string>
     <string name="trace_copied">تم نسخ سجل البحث</string>
+    <string name="debug_copied">تم نسخ سجل التصحيح</string>
     <string name="trace_running">جارٍ البحث في %1$d مصدر</string>
     <string name="health_skipped">لا يستجيب، تم التخطي</string>
     <string name="tor_off_only">يعمل فقط عند إيقاف Tor</string>

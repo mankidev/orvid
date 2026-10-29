@@ -139,6 +139,7 @@
     <string name="trace_failed">ошибка: %1$s</string>
     <string name="trace_summary">источников: %1$d, за %2$s с</string>
     <string name="trace_copied">Журнал поиска скопирован</string>
+    <string name="debug_copied">Журнал отладки скопирован</string>
     <string name="trace_running">Поиск в источниках: %1$d</string>
     <string name="health_skipped">не отвечает, пропущено</string>
     <string name="tor_off_only">Работает только при выключенном Tor</string>

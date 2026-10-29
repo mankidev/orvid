@@ -1,7 +1,6 @@
 package com.orvid.app;
 
 import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
@@ -15,19 +14,6 @@ public final class TempLogs {
     private static final long KEEP_SECONDS = 24 * 60 * 60;
 
     private TempLogs() {
-    }
-
-    public static Uri create(Context context, String prefix) {
-        if (Build.VERSION.SDK_INT < 29) return null;
-        ContentValues v = new ContentValues();
-        v.put(MediaStore.Downloads.DISPLAY_NAME, prefix + "-" + System.currentTimeMillis() + ".txt");
-        v.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
-        v.put(MediaStore.Downloads.RELATIVE_PATH, FOLDER);
-        try {
-            return context.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     public static void sweep(Context context) {

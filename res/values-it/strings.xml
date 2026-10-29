@@ -139,6 +139,7 @@
     <string name="trace_failed">errore: %1$s</string>
     <string name="trace_summary">%1$d fonti cercate in %2$s s</string>
     <string name="trace_copied">Registro di ricerca copiato</string>
+    <string name="debug_copied">Registro di debug copiato</string>
     <string name="trace_running">Ricerca in %1$d fonti</string>
     <string name="health_skipped">non risponde, saltato</string>
     <string name="tor_off_only">Funziona solo con Tor disattivato</string>

@@ -139,6 +139,7 @@
     <string name="trace_failed">विफल: %1$s</string>
     <string name="trace_summary">%1$d स्रोत %2$s सेकंड में खोजे गए</string>
     <string name="trace_copied">खोज लॉग कॉपी किया गया</string>
+    <string name="debug_copied">डीबग लॉग कॉपी किया गया</string>
     <string name="trace_running">%1$d स्रोतों में खोज रहा है</string>
     <string name="health_skipped">जवाब नहीं दे रहा, छोड़ा गया</string>
     <string name="tor_off_only">केवल Tor बंद होने पर काम करता है</string>
