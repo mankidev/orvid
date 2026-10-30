@@ -177,4 +177,5 @@
     <string name="invalid_ip">请输入 IP 地址，例如 192.168.1.20</string>
     <string name="cast_unsupported">此视频无法发送到电视</string>
     <string name="cast_failed">无法开始投屏：%1$s</string>
+    <string name="share">分享</string>
 </resources>

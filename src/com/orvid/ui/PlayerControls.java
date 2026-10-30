@@ -592,6 +592,12 @@ final class PlayerControls implements Player.Listener {
             player.setRepeatMode(loopOn ? Player.REPEAT_MODE_OFF : Player.REPEAT_MODE_ONE);
             sheet.dismiss();
         });
+        if (activity instanceof PlayerActivity) {
+            sheet.row(R.drawable.ic_share, activity.getString(R.string.share), "", () -> {
+                sheet.dismiss();
+                ((PlayerActivity) activity).share();
+            });
+        }
         boolean debugOn = com.orvid.app.OrvidApp.get().debugOverlay();
         sheet.row(R.drawable.ic_bug, activity.getString(R.string.debug_overlay),
                 activity.getString(debugOn ? R.string.on : R.string.off), () -> {

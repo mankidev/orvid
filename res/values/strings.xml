@@ -181,4 +181,5 @@ Tap to cancel</string>
     <string name="invalid_ip">Enter an IP address like 192.168.1.20</string>
     <string name="cast_unsupported">This video can\'t be sent to a TV</string>
     <string name="cast_failed">Could not start casting: %1$s</string>
+    <string name="share">Share</string>
 </resources>

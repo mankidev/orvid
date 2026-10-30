@@ -177,4 +177,5 @@
     <string name="invalid_ip">192.168.1.20 のような IP アドレスを入力</string>
     <string name="cast_unsupported">この動画はテレビに送れません</string>
     <string name="cast_failed">キャストを開始できませんでした: %1$s</string>
+    <string name="share">共有</string>
 </resources>

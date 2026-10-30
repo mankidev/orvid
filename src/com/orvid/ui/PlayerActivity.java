@@ -1233,7 +1233,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                         Diag.mark("related search FAIL " + e);
                     }
                 }
-                return com.orvid.search.Ranker.similar(title, channel, pageUrl, p.items, found, true);
+                return com.orvid.search.Ranker.similar(title, channel, pageUrl, p.items, found, true, RELATED_MIN);
             }
 
             @Override
@@ -1356,6 +1356,15 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 relatedDone();
             }
         }.startBackground();
+    }
+
+    void share() {
+        if (pageUrl == null) return;
+        String title = ((TextView) header.findViewById(R.id.name)).getText().toString();
+        Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_SUBJECT, title)
+                .putExtra(Intent.EXTRA_TEXT, title.isEmpty() ? pageUrl : title + "\n" + pageUrl);
+        startActivity(Intent.createChooser(send, getString(R.string.share)));
     }
 
     private String relatedKeys(String title) {

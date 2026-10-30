@@ -179,4 +179,5 @@
     <string name="invalid_ip">192.168.1.20 gibi bir IP adresi gir</string>
     <string name="cast_unsupported">Bu video TV\'ye gönderilemiyor</string>
     <string name="cast_failed">Yayın başlatılamadı: %1$s</string>
+    <string name="share">Paylaş</string>
 </resources>

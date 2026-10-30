@@ -177,4 +177,5 @@ Dotknij, aby anulować</string>
     <string name="invalid_ip">Wpisz adres IP, np. 192.168.1.20</string>
     <string name="cast_unsupported">Tego filmu nie można wysłać do telewizora</string>
     <string name="cast_failed">Nie udało się rozpocząć przesyłania: %1$s</string>
+    <string name="share">Udostępnij</string>
 </resources>

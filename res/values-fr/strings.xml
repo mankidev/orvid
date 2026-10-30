@@ -177,4 +177,5 @@ Touchez pour annuler</string>
     <string name="invalid_ip">Saisis une adresse IP comme 192.168.1.20</string>
     <string name="cast_unsupported">Cette vidéo ne peut pas être envoyée à une TV</string>
     <string name="cast_failed">Impossible de lancer le cast : %1$s</string>
+    <string name="share">Partager</string>
 </resources>

@@ -177,4 +177,5 @@ Ketuk untuk membatalkan</string>
     <string name="invalid_ip">Masukkan alamat IP seperti 192.168.1.20</string>
     <string name="cast_unsupported">Video ini tidak bisa dikirim ke TV</string>
     <string name="cast_failed">Tidak bisa memulai transmisi: %1$s</string>
+    <string name="share">Bagikan</string>
 </resources>

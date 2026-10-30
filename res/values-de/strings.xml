@@ -177,4 +177,5 @@ Zum Abbrechen tippen</string>
     <string name="invalid_ip">Gib eine IP-Adresse wie 192.168.1.20 ein</string>
     <string name="cast_unsupported">Dieses Video kann nicht an einen Fernseher gesendet werden</string>
     <string name="cast_failed">Streaming konnte nicht gestartet werden: %1$s</string>
+    <string name="share">Teilen</string>
 </resources>

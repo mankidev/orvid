@@ -177,4 +177,5 @@ Toca para cancelar</string>
     <string name="invalid_ip">Escribe una dirección IP como 192.168.1.20</string>
     <string name="cast_unsupported">Este vídeo no se puede enviar a una TV</string>
     <string name="cast_failed">No se pudo empezar a enviar: %1$s</string>
+    <string name="share">Compartir</string>
 </resources>
