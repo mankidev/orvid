@@ -7,7 +7,7 @@ import com.orvid.app.OrvidApp;
 
 public final class Panic {
 
-    private static final float DROP_DP = 100;
+    private static final float DROP_DP = 60;
     private static final float SPAN_DRIFT = 0.35f;
 
     private float startX;
@@ -75,7 +75,22 @@ public final class Panic {
     private static void exit(Activity activity) {
         activity.getWindow().getDecorView().setVisibility(android.view.View.INVISIBLE);
         try {
+            androidx.media3.exoplayer.ExoPlayer p = com.orvid.play.Session.player();
+            if (p != null) {
+                p.setVolume(0);
+                p.pause();
+            }
+        } catch (RuntimeException ignored) {
+        }
+        try {
+            activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_MAIN)
+                    .addCategory(android.content.Intent.CATEGORY_HOME)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION));
+            activity.overridePendingTransition(0, 0);
+        } catch (RuntimeException e) {
             activity.moveTaskToBack(true);
+        }
+        try {
             activity.finishAndRemoveTask();
             activity.overridePendingTransition(0, 0);
         } catch (RuntimeException ignored) {
