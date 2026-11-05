@@ -178,4 +178,8 @@ Touchez pour annuler</string>
     <string name="cast_unsupported">Cette vidéo ne peut pas être envoyée à une TV</string>
     <string name="cast_failed">Impossible de lancer le cast : %1$s</string>
     <string name="share">Partager</string>
+    <string name="hide_known">Déjà vu</string>
+    <string name="hide_known_done">Masquée. Elle n\'apparaîtra plus dans les résultats.</string>
+    <string name="hidden_videos">Vidéos masquées</string>
+    <string name="hidden_clear">Réafficher les vidéos masquées (%d)</string>
 </resources>

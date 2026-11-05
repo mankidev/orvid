@@ -178,4 +178,8 @@ Ketuk untuk membatalkan</string>
     <string name="cast_unsupported">Video ini tidak bisa dikirim ke TV</string>
     <string name="cast_failed">Tidak bisa memulai transmisi: %1$s</string>
     <string name="share">Bagikan</string>
+    <string name="hide_known">Sudah pernah lihat</string>
+    <string name="hide_known_done">Disembunyikan. Tidak akan muncul lagi di hasil.</string>
+    <string name="hidden_videos">Video tersembunyi</string>
+    <string name="hidden_clear">Tampilkan lagi video tersembunyi (%d)</string>
 </resources>

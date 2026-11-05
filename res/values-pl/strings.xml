@@ -178,4 +178,8 @@ Dotknij, aby anulować</string>
     <string name="cast_unsupported">Tego filmu nie można wysłać do telewizora</string>
     <string name="cast_failed">Nie udało się rozpocząć przesyłania: %1$s</string>
     <string name="share">Udostępnij</string>
+    <string name="hide_known">Już to widziałem</string>
+    <string name="hide_known_done">Ukryto. Nie pojawi się więcej w wynikach.</string>
+    <string name="hidden_videos">Ukryte filmy</string>
+    <string name="hidden_clear">Pokaż ponownie ukryte filmy (%d)</string>
 </resources>

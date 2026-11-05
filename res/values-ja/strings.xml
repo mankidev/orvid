@@ -178,4 +178,8 @@
     <string name="cast_unsupported">この動画はテレビに送れません</string>
     <string name="cast_failed">キャストを開始できませんでした: %1$s</string>
     <string name="share">共有</string>
+    <string name="hide_known">視聴済み</string>
+    <string name="hide_known_done">非表示にしました。今後の結果には表示されません。</string>
+    <string name="hidden_videos">非表示の動画</string>
+    <string name="hidden_clear">非表示の動画を再表示 (%d)</string>
 </resources>

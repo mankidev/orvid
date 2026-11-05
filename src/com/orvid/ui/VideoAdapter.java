@@ -90,6 +90,7 @@ final class VideoAdapter extends BaseAdapter {
         menu.getMenu().add(0, 3, 0, R.string.play_next);
         menu.getMenu().add(0, 4, 1, R.string.add_queue);
         menu.getMenu().add(0, 1, 2, R.string.not_interested);
+        menu.getMenu().add(0, 6, 2, R.string.hide_known);
         menu.getMenu().add(0, 2, 3, R.string.source_off);
         if (ChannelActivity.canOpen(item.getUploaderUrl())) menu.getMenu().add(0, 5, 4, R.string.go_to_channel);
         menu.setOnMenuItemClickListener(m -> {
@@ -105,6 +106,12 @@ final class VideoAdapter extends BaseAdapter {
             }
             if (m.getItemId() == 2) {
                 turnOffSource(item);
+                return true;
+            }
+            if (m.getItemId() == 6) {
+                com.orvid.search.Known.add(item);
+                prune();
+                android.widget.Toast.makeText(context, R.string.hide_known_done, android.widget.Toast.LENGTH_SHORT).show();
                 return true;
             }
             com.orvid.search.NotInterested.add(item);
@@ -166,6 +173,11 @@ final class VideoAdapter extends BaseAdapter {
         for (int i = 0; i < items.size(); i++) {
             StreamInfoItem item = items.get(i);
             if (!page.equals(item.getUrl())) continue;
+            if (com.orvid.search.Known.hides(item)) {
+                tail.remove(items.remove(i));
+                notifyDataSetChanged();
+                return;
+            }
             boolean dropped = false;
             while (i < items.size() && items.get(i) == item && dropCopies(i)) dropped = true;
             if (dropped) notifyDataSetChanged();

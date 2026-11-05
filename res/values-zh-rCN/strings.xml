@@ -178,4 +178,8 @@
     <string name="cast_unsupported">此视频无法发送到电视</string>
     <string name="cast_failed">无法开始投屏：%1$s</string>
     <string name="share">分享</string>
+    <string name="hide_known">看过了</string>
+    <string name="hide_known_done">已隐藏。不会再出现在结果中。</string>
+    <string name="hidden_videos">已隐藏的视频</string>
+    <string name="hidden_clear">重新显示已隐藏的视频 (%d)</string>
 </resources>

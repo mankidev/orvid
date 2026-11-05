@@ -178,4 +178,8 @@
     <string name="cast_unsupported">لا يمكن إرسال هذا الفيديو إلى التلفاز</string>
     <string name="cast_failed">تعذّر بدء البث: %1$s</string>
     <string name="share">مشاركة</string>
+    <string name="hide_known">شاهدت هذا</string>
+    <string name="hide_known_done">تم الإخفاء. لن يظهر في النتائج مرة أخرى.</string>
+    <string name="hidden_videos">الفيديوهات المخفية</string>
+    <string name="hidden_clear">إظهار الفيديوهات المخفية مجددًا (%d)</string>
 </resources>

@@ -96,6 +96,16 @@ final class FilterSheet {
                     changed[0] = true;
                 });
 
+        if (com.orvid.search.Known.count() > 0) {
+            section(activity, column, R.string.hidden_videos);
+            TextView[] knownRow = new TextView[1];
+            knownRow[0] = row(activity, column, activity.getString(R.string.hidden_clear, com.orvid.search.Known.count()), R.drawable.ic_close, () -> {
+                com.orvid.search.Known.clear();
+                knownRow[0].setVisibility(android.view.View.GONE);
+                changed[0] = true;
+            });
+        }
+
         section(activity, column, R.string.repositories);
         Runnable reload = () -> {
             changed[0] = true;

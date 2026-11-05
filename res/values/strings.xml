@@ -182,4 +182,8 @@ Tap to cancel</string>
     <string name="cast_unsupported">This video can\'t be sent to a TV</string>
     <string name="cast_failed">Could not start casting: %1$s</string>
     <string name="share">Share</string>
+    <string name="hide_known">I\'ve seen this</string>
+    <string name="hide_known_done">Hidden. It won\'t show up in results again.</string>
+    <string name="hidden_videos">Hidden videos</string>
+    <string name="hidden_clear">Show hidden videos again (%d)</string>
 </resources>

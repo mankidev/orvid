@@ -178,4 +178,8 @@
     <string name="cast_unsupported">यह वीडियो टीवी पर नहीं भेजा जा सकता</string>
     <string name="cast_failed">कास्ट शुरू नहीं हो सका: %1$s</string>
     <string name="share">शेयर करें</string>
+    <string name="hide_known">यह देख चुका हूँ</string>
+    <string name="hide_known_done">छिपा दिया गया। यह परिणामों में फिर नहीं दिखेगा।</string>
+    <string name="hidden_videos">छिपे हुए वीडियो</string>
+    <string name="hidden_clear">छिपे वीडियो फिर दिखाएँ (%d)</string>
 </resources>

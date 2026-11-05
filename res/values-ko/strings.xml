@@ -178,4 +178,8 @@
     <string name="cast_unsupported">이 동영상은 TV로 보낼 수 없습니다</string>
     <string name="cast_failed">전송을 시작할 수 없습니다: %1$s</string>
     <string name="share">공유</string>
+    <string name="hide_known">이미 봤어요</string>
+    <string name="hide_known_done">숨겼습니다. 결과에 다시 표시되지 않습니다.</string>
+    <string name="hidden_videos">숨긴 동영상</string>
+    <string name="hidden_clear">숨긴 동영상 다시 표시 (%d)</string>
 </resources>

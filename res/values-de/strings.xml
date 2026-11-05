@@ -178,4 +178,8 @@ Zum Abbrechen tippen</string>
     <string name="cast_unsupported">Dieses Video kann nicht an einen Fernseher gesendet werden</string>
     <string name="cast_failed">Streaming konnte nicht gestartet werden: %1$s</string>
     <string name="share">Teilen</string>
+    <string name="hide_known">Kenne ich schon</string>
+    <string name="hide_known_done">Ausgeblendet. Es erscheint nicht mehr in den Ergebnissen.</string>
+    <string name="hidden_videos">Ausgeblendete Videos</string>
+    <string name="hidden_clear">Ausgeblendete Videos wieder zeigen (%d)</string>
 </resources>

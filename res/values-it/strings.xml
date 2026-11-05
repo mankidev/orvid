@@ -178,4 +178,8 @@ Tocca per annullare</string>
     <string name="cast_unsupported">Questo video non può essere inviato a una TV</string>
     <string name="cast_failed">Impossibile avviare la trasmissione: %1$s</string>
     <string name="share">Condividi</string>
+    <string name="hide_known">Già visto</string>
+    <string name="hide_known_done">Nascosto. Non comparirà più nei risultati.</string>
+    <string name="hidden_videos">Video nascosti</string>
+    <string name="hidden_clear">Mostra di nuovo i video nascosti (%d)</string>
 </resources>

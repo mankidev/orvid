@@ -178,4 +178,8 @@ Toca para cancelar</string>
     <string name="cast_unsupported">Este vídeo no se puede enviar a una TV</string>
     <string name="cast_failed">No se pudo empezar a enviar: %1$s</string>
     <string name="share">Compartir</string>
+    <string name="hide_known">Ya lo he visto</string>
+    <string name="hide_known_done">Oculto. No volverá a aparecer en los resultados.</string>
+    <string name="hidden_videos">Vídeos ocultos</string>
+    <string name="hidden_clear">Volver a mostrar vídeos ocultos (%d)</string>
 </resources>

@@ -54,6 +54,7 @@ public final class OrvidApp extends Application {
         if (prefs.contains("dev_mode")) prefs.edit().remove("dev_mode").apply();
         if (prefs.contains("mode")) prefs.edit().remove("mode").apply();
         new File(getFilesDir(), "history.json").delete();
+        new Thread(() -> com.orvid.search.Known.load(getFilesDir()), "orvid-known").start();
         File speech = new File(getFilesDir(), "speech");
         File[] models = speech.listFiles();
         if (models != null) for (File f : models) f.delete();

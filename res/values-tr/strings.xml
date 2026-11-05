@@ -180,4 +180,8 @@
     <string name="cast_unsupported">Bu video TV\'ye gönderilemiyor</string>
     <string name="cast_failed">Yayın başlatılamadı: %1$s</string>
     <string name="share">Paylaş</string>
+    <string name="hide_known">Bunu biliyorum</string>
+    <string name="hide_known_done">Gizlendi. Sonuçlarda bir daha çıkmayacak.</string>
+    <string name="hidden_videos">Gizlenen videolar</string>
+    <string name="hidden_clear">Gizlenen videoları geri getir (%d)</string>
 </resources>
