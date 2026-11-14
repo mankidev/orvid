@@ -23,15 +23,18 @@ public final class Registry {
     private static volatile java.util.Map<String, Integer> ranks = Collections.emptyMap();
 
     public static int rank(String key) {
+        ready();
         Integer r = ranks.get(key);
         return r == null ? 1000 : r;
     }
 
     public static boolean engineOn(String key) {
+        ready();
         return engines.contains(key);
     }
 
     public static boolean empty() {
+        ready();
         return sources.isEmpty() && engines.isEmpty();
     }
 
@@ -43,12 +46,40 @@ public final class Registry {
     }
 
     public static List<ExtSource> sources() {
+        ready();
         return sources;
     }
 
     public static ExtSource forUrl(String url) {
+        ready();
         for (ExtSource s : sources) if (s.handles(url)) return s;
         return null;
+    }
+
+    private static final java.util.concurrent.CountDownLatch FIRST = new java.util.concurrent.CountDownLatch(1);
+    private static volatile Thread loader;
+
+    public static void loadAsync(File root) {
+        Thread t = new Thread(() -> {
+            try {
+                reload(root);
+            } finally {
+                loader = null;
+                FIRST.countDown();
+            }
+        }, "orvid-registry");
+        loader = t;
+        t.start();
+    }
+
+    private static void ready() {
+        Thread t = loader;
+        if (t == null || t == Thread.currentThread()) return;
+        try {
+            FIRST.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     public static synchronized void reload(File root) {

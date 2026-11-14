@@ -104,10 +104,9 @@ public final class Filters {
 
     public static Filters load(SharedPreferences p) {
         Filters f = new Filters();
-        f.type = p.getInt("f_type", TYPE_ALL);
-        f.date = p.getInt("f_date", DATE_ANY);
-        f.duration = p.getInt("f_duration", DURATION_ANY);
-        f.sort = p.getInt("f_sort", SORT_RELEVANCE);
+        if (p.contains("f_type") || p.contains("f_date") || p.contains("f_duration") || p.contains("f_sort")) {
+            p.edit().remove("f_type").remove("f_date").remove("f_duration").remove("f_sort").apply();
+        }
         f.youtube = p.getBoolean("f_youtube", true);
         f.hideAdult = !Source.adultUnlocked;
         f.dailymotion = p.getBoolean("f_dailymotion", true);
@@ -123,6 +122,15 @@ public final class Filters {
         return f;
     }
 
+    public boolean resetView() {
+        boolean changed = type != TYPE_ALL || date != DATE_ANY || duration != DURATION_ANY || sort != SORT_RELEVANCE;
+        type = TYPE_ALL;
+        date = DATE_ANY;
+        duration = DURATION_ANY;
+        sort = SORT_RELEVANCE;
+        return changed;
+    }
+
     public String key() {
         StringBuilder b = new StringBuilder().append(date).append(',').append(type).append(',').append(duration)
                 .append(',').append(sort).append(',').append(youtube).append(dailymotion)
@@ -134,8 +142,7 @@ public final class Filters {
     }
 
     public void save(SharedPreferences p) {
-        p.edit().putInt("f_date", date).putInt("f_type", type).putInt("f_duration", duration).putInt("f_sort", sort)
-                .putBoolean("f_youtube", youtube).putBoolean("f_dailymotion", dailymotion).putBoolean("f_vk", vk).apply();
+        p.edit().putBoolean("f_youtube", youtube).putBoolean("f_dailymotion", dailymotion).putBoolean("f_vk", vk).apply();
         SharedPreferences.Editor e = p.edit().remove("f_twitch").remove("f_peertube");
         for (java.util.Map.Entry<String, Boolean> s : sources.entrySet()) {
             if (Source.ADULT_KEYS.contains(s.getKey())) e.remove("f_src_" + s.getKey());

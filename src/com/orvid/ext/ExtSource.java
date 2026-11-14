@@ -172,6 +172,7 @@ public final class ExtSource extends Source {
                 throw new IOException(e);
             }
             Direct d = new Direct(m.title, "", m.mp4, m.mp4.contains(".m3u8"), m.referer);
+            if (m.sprite != null) d.sprite(m.sprite);
             if (m.qualities.size() > 1) {
                 for (java.util.Map.Entry<Integer, String> q : m.qualities.entrySet()) d.variant(q.getKey(), q.getValue());
             }

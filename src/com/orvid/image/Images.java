@@ -28,7 +28,12 @@ public final class Images {
     private final Handler main = new Handler(Looper.getMainLooper());
     public void clearDisk() {
         File[] files = dir.listFiles();
-        if (files != null) for (File f : files) f.delete();
+        if (files == null || files.length == 0) return;
+        Thread sweep = new Thread(() -> {
+            for (File f : files) f.delete();
+        }, "orvid-thumb-sweep");
+        sweep.setPriority(Thread.MIN_PRIORITY);
+        sweep.start();
     }
 
     public Images(File dir) {
@@ -410,6 +415,10 @@ public final class Images {
         Gone(int code) {
             super("HTTP " + code);
         }
+    }
+
+    public static String circuit(String url) {
+        return circuitFor(url);
     }
 
     private static String circuitFor(String url) {

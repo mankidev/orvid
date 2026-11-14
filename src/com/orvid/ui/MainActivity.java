@@ -93,6 +93,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         title = findViewById(R.id.title);
         title.setOnClickListener(v -> logoTapped());
         field = findViewById(R.id.search_field);
+        field.setSaveEnabled(false);
         searchBox = findViewById(R.id.search_box);
         clearButton = findViewById(R.id.search_clear);
         clearButton.setOnClickListener(v -> {
@@ -230,6 +231,11 @@ public final class MainActivity extends Activity implements Tor.Listener {
                 if (scrollState != SCROLL_STATE_IDLE) settleUntil = 0;
                 stopPrepare();
                 if (scrollState == SCROLL_STATE_IDLE) list.postDelayed(prepareVisible, PREPARE_IDLE_MS);
+                if (scrollState == SCROLL_STATE_IDLE && shown && !loadingMore
+                        && nearEnd(list.getFirstVisiblePosition(), list.getChildCount(), list.getCount())) {
+                    emptyBatches = 0;
+                    loadMore();
+                }
             }
 
             @Override
@@ -238,7 +244,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
                 if (shown && first > list.getHeaderViewsCount()) scrolledAway = true;
                 if (shown) deepestRow = Math.max(deepestRow, first + visible - list.getHeaderViewsCount());
                 adapter.prefetchAfter(Math.max(0, first + visible - list.getHeaderViewsCount()) * adapter.columns());
-                if (total > 0 && first + visible >= total - Math.max(12, visible * 3)) loadMore();
+                if (total > 0 && nearEnd(first, visible, total)) loadMore();
             }
         });
 
@@ -403,6 +409,25 @@ public final class MainActivity extends Activity implements Tor.Listener {
     }
 
     @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        dropDraft();
+    }
+
+    private void dropDraft() {
+        String typed = field.getText().toString().trim();
+        if (typed.isEmpty() || searched && typed.equals(lastInput)) return;
+        field.removeCallbacks(typedGuess);
+        dismissSuggest();
+        if (searched && lastInput != null) {
+            field.setText(lastInput);
+            hideKeyboard();
+        } else {
+            closeSearch();
+        }
+    }
+
+    @Override
     public void onTorChanged() {
         runOnUiThread(() -> {
             refreshTor();
@@ -486,14 +511,17 @@ public final class MainActivity extends Activity implements Tor.Listener {
         Batch(int extras) {
             extraNext = new String[extras];
             extraDone = new boolean[extras];
+            extraFailed = new boolean[extras];
         }
         String ytContinuation;
         boolean dmMore;
+        boolean dmGot;
         boolean ytDone;
         boolean dmDone;
         boolean vkDone;
         boolean last;
         final boolean[] extraDone;
+        final boolean[] extraFailed;
         List<StreamInfoItem> fresh;
         boolean[] barren;
         boolean[] repeating;
@@ -537,6 +565,9 @@ public final class MainActivity extends Activity implements Tor.Listener {
         extraNext = new String[extras.size()];
         extraCircuit = new String[extras.size()];
         noMore = new boolean[weights.length];
+        moreFails = new int[extras.size()];
+        moreCursor = 0;
+        emptyAgain = new java.util.concurrent.atomic.AtomicInteger();
         loadingMore = false;
         correctedQuery = null;
         lastSourceError = null;
@@ -735,10 +766,20 @@ public final class MainActivity extends Activity implements Tor.Listener {
     private static final long SECOND_WAVE_POLL_MS = 200;
     private final List<Queued> deferred = new ArrayList<>();
     private static final int ADULT_WAVE = 20;
+    private static final int WAVE_STRAGGLERS = 5;
     private final List<Queued> adultLater = new ArrayList<>();
 
+    private static boolean nearEnd(int first, int visible, int total) {
+        return first + visible >= total - Math.max(12, visible * 3);
+    }
+
+    private boolean moreAdult() {
+        if (adultLater.isEmpty() || rankBusy || rankTask != null || !shown && pendingSources > 0) return false;
+        return nearEnd(list.getFirstVisiblePosition(), list.getChildCount(), list.getCount()) && releaseAdult();
+    }
+
     private boolean releaseAdult() {
-        if (adultLater.isEmpty() || pendingSources > 0) return false;
+        if (adultLater.isEmpty() || pendingSources > WAVE_STRAGGLERS) return false;
         int n = Math.min(ADULT_WAVE, adultLater.size());
         List<Queued> go = new ArrayList<>(adultLater.subList(0, n));
         adultLater.subList(0, n).clear();
@@ -774,6 +815,9 @@ public final class MainActivity extends Activity implements Tor.Listener {
         }, SECOND_WAVE_POLL_MS);
     }
 
+    private static final int EMPTY_AGAIN_MAX = 3;
+    private volatile java.util.concurrent.atomic.AtomicInteger emptyAgain = new java.util.concurrent.atomic.AtomicInteger();
+
     private void runExtra(int generation, Filters f, Source src, int slot, Query forced) {
         Query use;
         synchronized (extraLock) {
@@ -792,12 +836,14 @@ public final class MainActivity extends Activity implements Tor.Listener {
                 runOnUiThread(() -> sourceFailed(generation, CORE + slot, null));
                 return;
             }
-            if (first.value.items.isEmpty() && Fetch.torMode()) {
+            java.util.concurrent.atomic.AtomicInteger misses = emptyAgain;
+            if (first.value.items.isEmpty() && Fetch.torMode() && misses.get() < EMPTY_AGAIN_MAX) {
                 Diag.mark(src.key + " empty, asking again from another exit");
                 com.orvid.net.Trace.note(com.orvid.net.Trace.Step.AGAIN, 0);
                 Hedge.Result<Source.Page> again = Hedge.call(Fetch.newCircuit("x"), () -> Fetch.newCircuit("x"),
                         EXTRA_HEDGE_MS, c -> src.search(c, use.plainQuery, f, null));
                 if (!again.value.items.isEmpty()) first = again;
+                else misses.incrementAndGet();
             }
             final Hedge.Result<Source.Page> r = first;
             runOnUiThread(() -> {
@@ -1176,7 +1222,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     private static boolean[] barren(List<List<StreamInfoItem>> lists, List<StreamInfoItem> ranked) {
         java.util.Set<StreamInfoItem> kept = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-        kept.addAll(ranked.subList(0, com.orvid.search.Ranker.Ranked.strict(ranked)));
+        kept.addAll(ranked);
         boolean[] out = new boolean[lists.size()];
         for (int i = 0; i < lists.size(); i++) {
             List<StreamInfoItem> list = lists.get(i);
@@ -1473,6 +1519,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         }
         if (!deferred.isEmpty() && pendingSources <= deferred.size()) releaseDeferred();
         if (pendingSources <= 0) judgeHealth();
+        if (moreAdult()) return;
         if (pendingSources <= 0 && !shown && arrived != null && query != null && !rankBusy) {
             requestRank(searchGeneration, true);
             return;
@@ -1491,6 +1538,11 @@ public final class MainActivity extends Activity implements Tor.Listener {
                 : getString(R.string.no_results_filters, android.text.TextUtils.join(", ", active));
     }
 
+    private static final int MORE_SOURCES = 12;
+    private static final int MORE_SOURCES_DIRECT = 24;
+    private static final int MORE_FAILS_MAX = 2;
+    private int moreCursor;
+    private int[] moreFails = new int[0];
     private static final int REFILL_BELOW = 6;
     private static final int MAX_EMPTY_BATCHES = 3;
     private int emptyBatches;
@@ -1503,8 +1555,26 @@ public final class MainActivity extends Activity implements Tor.Listener {
         final String wantVk = noMore[2] ? null : vkNext;
         final String[] wantExtra = extraNext.clone();
         boolean any = token != null || wantDm || wantVk != null;
-        for (int i = 0; i < wantExtra.length; i++) {
-            if (noMore[CORE + i]) wantExtra[i] = null;
+        int budget = Fetch.torMode() ? MORE_SOURCES : MORE_SOURCES_DIRECT;
+        int count = wantExtra.length;
+        int from = count == 0 ? 0 : moreCursor % count;
+        boolean[] picked = new boolean[count];
+        for (int k = 0; k < count; k++) {
+            int i = (from + k) % count;
+            if (noMore[CORE + i] || wantExtra[i] == null) continue;
+            boolean flying;
+            synchronized (stragglers) {
+                flying = stragglers.containsKey(i);
+            }
+            if (!flying && budget <= 0) continue;
+            picked[i] = true;
+            if (!flying) {
+                budget--;
+                moreCursor = i + 1;
+            }
+        }
+        for (int i = 0; i < count; i++) {
+            if (!picked[i]) wantExtra[i] = null;
             any |= wantExtra[i] != null;
         }
         if (!any) return;
@@ -1540,12 +1610,12 @@ public final class MainActivity extends Activity implements Tor.Listener {
             private Batch collect() throws Exception {
                 long started = android.os.SystemClock.uptimeMillis();
                 long until = started + moreWait();
-                dm = !wantDm ? null
-                        : PARALLEL.submit(inScope(scope, () -> Dailymotion.search(Visionos.takeCircuit(), q.plainQuery, nextDm, f.dailymotionParams(), f.type == Filters.TYPE_SHORTS)));
-                vkf = wantVk == null || ownerVk == null ? null
-                        : PARALLEL.submit(inScope(scope, () -> Fetch.retrying(ownerVk, c -> com.orvid.vk.Vk.search(c, q.plainQuery, wantVk))));
-                yt = token == null ? null
-                        : PARALLEL.submit(inScope(scope, () -> Fetch.retrying(ownerCircuit, c -> Search.more(c, token))));
+                dm = !wantDm ? null : resume(generation, DM_SLOT, "p" + nextDm, scope,
+                        () -> Dailymotion.search(Visionos.takeCircuit(), q.plainQuery, nextDm, f.dailymotionParams(), f.type == Filters.TYPE_SHORTS));
+                vkf = wantVk == null || ownerVk == null ? null : resume(generation, VK_SLOT, wantVk, scope,
+                        () -> Fetch.retrying(ownerVk, c -> com.orvid.vk.Vk.search(c, q.plainQuery, wantVk)));
+                yt = token == null ? null : resume(generation, YT_SLOT, token, scope,
+                        () -> Fetch.retrying(ownerCircuit, c -> Search.more(c, token)));
                 for (int i = 0; i < sourcesNow.size(); i++) {
                     final Source src = sourcesNow.get(i);
                     final String want = wantExtra[i];
@@ -1584,7 +1654,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
                     batch.ytContinuation = token;
                     if (yt != null) {
                         try {
-                            Search.Page p = upTo(yt, until);
+                            Search.Page p = waitOrKeep(yt, until, generation, YT_SLOT, token);
                             if (p != null) {
                                 batch.youtube.addAll(p.items);
                                 batch.ytContinuation = p.continuation;
@@ -1599,8 +1669,9 @@ public final class MainActivity extends Activity implements Tor.Listener {
                     batch.dmMore = wantDm;
                     if (dm != null) {
                         try {
-                            Dailymotion.Page page = upTo(dm, until);
+                            Dailymotion.Page page = waitOrKeep(dm, until, generation, DM_SLOT, "p" + nextDm);
                             if (page != null) {
+                                batch.dmGot = true;
                                 batch.dailymotion.addAll(page.items);
                                 batch.dmMore = page.hasMore;
                             }
@@ -1614,7 +1685,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
                     batch.vkNext = wantVk;
                     if (vkf != null) {
                         try {
-                            com.orvid.vk.Vk.Page page = upTo(vkf, until);
+                            com.orvid.vk.Vk.Page page = waitOrKeep(vkf, until, generation, VK_SLOT, wantVk);
                             if (page != null) {
                                 batch.vk.addAll(page.items);
                                 batch.vkNext = page.next;
@@ -1637,7 +1708,8 @@ public final class MainActivity extends Activity implements Tor.Listener {
                                     got.addAll(page.items);
                                     batch.extraNext[i] = page.next;
                                 }
-                            } catch (Exception ignored) {
+                            } catch (Exception e) {
+                                batch.extraFailed[i] = !(e instanceof InterruptedException);
                             }
                         }
                     }
@@ -1656,11 +1728,19 @@ public final class MainActivity extends Activity implements Tor.Listener {
                 if (result.ytDone) continuation = result.ytContinuation;
                 if (result.dmDone) {
                     dmMore = result.dmMore;
-                    if (wantDm) dmPage = nextDm;
+                    if (wantDm && result.dmGot) dmPage = nextDm;
                 }
                 if (result.vkDone && wantVk != null) vkNext = result.vkNext;
                 for (int i = 0; i < wantExtra.length; i++) {
-                    if (wantExtra[i] != null && result.extraDone[i]) extraNext[i] = result.extraNext[i];
+                    if (wantExtra[i] == null || !result.extraDone[i]) continue;
+                    extraNext[i] = result.extraNext[i];
+                    if (i >= moreFails.length) continue;
+                    if (!result.extraFailed[i]) {
+                        moreFails[i] = 0;
+                    } else if (++moreFails[i] >= MORE_FAILS_MAX && !noMore[CORE + i]) {
+                        noMore[CORE + i] = true;
+                        Diag.mark("source " + (CORE + i) + " keeps failing, no more pages");
+                    }
                 }
                 stopPaging(result.barren);
                 stopPaging(result.repeating, "repeats earlier results");
@@ -1704,16 +1784,26 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     private final java.util.Map<Integer, Object[]> stragglers = new java.util.HashMap<>();
 
+    private static final int YT_SLOT = -1;
+    private static final int DM_SLOT = -2;
+    private static final int VK_SLOT = -3;
+
     @SuppressWarnings("unchecked")
-    private java.util.concurrent.Future<Source.Page> straggler(int generation, int index, String token) {
+    private <T> java.util.concurrent.Future<T> straggler(int generation, int index, String token) {
         synchronized (stragglers) {
             Object[] s = stragglers.remove(index);
             if (s == null || (int) s[0] != generation || !token.equals(s[1])) return null;
-            return (java.util.concurrent.Future<Source.Page>) s[2];
+            return (java.util.concurrent.Future<T>) s[2];
         }
     }
 
-    private Source.Page waitOrKeep(java.util.concurrent.Future<Source.Page> f, long until, int generation, int index, String token) throws Exception {
+    private <T> java.util.concurrent.Future<T> resume(int generation, int index, String token, Fetch.Scope scope,
+            java.util.concurrent.Callable<T> work) {
+        java.util.concurrent.Future<T> kept = straggler(generation, index, token);
+        return kept != null ? kept : PARALLEL.submit(inScope(scope, work));
+    }
+
+    private <T> T waitOrKeep(java.util.concurrent.Future<T> f, long until, int generation, int index, String token) throws Exception {
         long left = until - android.os.SystemClock.uptimeMillis();
         try {
             return f.get(Math.max(0, left), java.util.concurrent.TimeUnit.MILLISECONDS);
@@ -1721,16 +1811,6 @@ public final class MainActivity extends Activity implements Tor.Listener {
             synchronized (stragglers) {
                 stragglers.put(index, new Object[]{generation, token, f});
             }
-            return null;
-        }
-    }
-
-    private static <T> T upTo(java.util.concurrent.Future<T> f, long until) throws Exception {
-        long left = until - android.os.SystemClock.uptimeMillis();
-        try {
-            return f.get(Math.max(0, left), java.util.concurrent.TimeUnit.MILLISECONDS);
-        } catch (java.util.concurrent.TimeoutException e) {
-            f.cancel(true);
             return null;
         }
     }
@@ -1860,6 +1940,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
             goHome();
             return;
         }
+        filters.resetView();
         moveTaskToBack(true);
     }
 

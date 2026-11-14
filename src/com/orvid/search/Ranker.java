@@ -90,14 +90,15 @@ public final class Ranker {
         int order = 0;
         for (int src = 0; src < sources.size(); src++) {
             List<StreamInfoItem> list = sources.get(src);
-            boolean literal = weights[src] < 1 && !(tagged != null && src < tagged.length && tagged[src]);
+            boolean byTags = tagged != null && src < tagged.length && tagged[src];
+            boolean literal = weights[src] < 1 && !byTags;
             boolean strictOnly = literal && (!ctx.anchored.isEmpty() || guessed(q, list));
             for (int rank = 0; rank < list.size(); rank++) {
                 StreamInfoItem item = list.get(rank);
                 double s = score(q, ctx, item, rank, weights[src]);
                 if (strictOnly && !mentions(q, item)) s = Double.NEGATIVE_INFINITY;
-                boolean partial = literal && (q.terms.size() > 1 || !q.repeats.isEmpty()) && mentions(q, item) && coverage(q, item) < required(q);
-                if (literal && s >= 0 && (!mentions(q, item) || partial)) s = LOOSE;
+                boolean partial = (literal || byTags) && (q.terms.size() > 1 || !q.repeats.isEmpty()) && mentions(q, item) && coverage(q, item) < required(q);
+                if ((literal || byTags) && s >= 0 && (!mentions(q, item) || partial)) s = LOOSE;
                 com.orvid.app.DevInfo.rank(item, src, rank, s);
                 if (s >= 0) {
                     Scored kept = new Scored(item, s * jitter(item), order++);
@@ -117,8 +118,7 @@ public final class Ranker {
         List<Scored> loose = new ArrayList<>();
         for (int k = 0; k < sources.size(); k++) {
             boolean primary = weights[k] >= 1;
-            boolean byTags = tagged != null && k < tagged.length && tagged[k];
-            if (strictBySource[k] < MIN_STRICT && (byTags || (primary && out.size() < MIN_STRICT))) {
+            if (strictBySource[k] < MIN_STRICT && primary && out.size() < MIN_STRICT) {
                 loose.addAll(looseBySource.get(k));
             }
         }
@@ -127,7 +127,8 @@ public final class Ranker {
         List<StreamInfoItem> head = collapse(out);
         java.util.Set<StreamInfoItem> taken = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         taken.addAll(out);
-        List<StreamInfoItem> withTail = new ArrayList<>(head);
+        List<StreamInfoItem> tail = new ArrayList<>();
+        java.util.Map<StreamInfoItem, Double> trust = new java.util.IdentityHashMap<>();
         for (int r = 0; ; r++) {
             boolean more = false;
             for (int k = 0; k < looseBySource.size(); k++) {
@@ -137,15 +138,31 @@ public final class Ranker {
                 StreamInfoItem item = list.get(r).item;
                 boolean byTags = tagged != null && k < tagged.length && tagged[k];
                 if (weights[k] < 1 && !byTags && !q.terms.isEmpty() && !mentions(q, item)) continue;
-                if (!list.get(r).partial && !taken.contains(item)) withTail.add(item);
+                if (!taken.contains(item)) {
+                    tail.add(item);
+                    trust.put(item, mentionShare(q, sources.get(k)));
+                }
             }
             if (!more) break;
         }
+        java.util.Map<StreamInfoItem, Integer> covered = new java.util.IdentityHashMap<>();
+        for (StreamInfoItem item : tail) covered.put(item, q.terms.isEmpty() ? 0 : coverage(q, item));
+        Collections.sort(tail, (x, y) -> !covered.get(x).equals(covered.get(y)) ? covered.get(y) - covered.get(x)
+                : Double.compare(trust.get(y), trust.get(x)));
+        List<StreamInfoItem> withTail = new ArrayList<>(head);
+        withTail.addAll(tail);
         return new Ranked(collapse(withTail), head.size());
     }
 
     private static final int GUESS_MIN = 4;
     private static final double GUESS_SHARE = 0.3;
+
+    private static double mentionShare(Query q, List<StreamInfoItem> list) {
+        if (q.terms.isEmpty() || list.isEmpty()) return 0;
+        int hits = 0;
+        for (StreamInfoItem item : list) if (mentions(q, item)) hits++;
+        return hits / (double) list.size();
+    }
 
     static boolean guessed(Query q, List<StreamInfoItem> list) {
         if (q.terms.isEmpty() || list.size() < GUESS_MIN) return false;
@@ -168,6 +185,42 @@ public final class Ranker {
         VOUCHED.addAll(items);
     }
 
+    private static final class Parsed {
+        final String name;
+        final String uploader;
+        final String title;
+        final String channel;
+        final List<String> titleWords;
+        final List<String> channelWords;
+        private String duplicate;
+
+        Parsed(StreamInfoItem item) {
+            name = item.getName();
+            uploader = item.getUploaderName();
+            title = Query.fold(name == null ? "" : name);
+            channel = Query.fold(uploader == null ? "" : uploader);
+            titleWords = Collections.unmodifiableList(Query.words(title));
+            channelWords = Collections.unmodifiableList(Query.words(channel));
+        }
+
+        String duplicateKey() {
+            if (duplicate == null) duplicate = Ranker.duplicateKey(name);
+            return duplicate;
+        }
+    }
+
+    private static final java.util.Map<StreamInfoItem, Parsed> PARSED =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    private static Parsed parsed(StreamInfoItem item) {
+        Parsed p = PARSED.get(item);
+        if (p == null || p.name != item.getName() || p.uploader != item.getUploaderName()) {
+            p = new Parsed(item);
+            PARSED.put(item, p);
+        }
+        return p;
+    }
+
     static boolean vouched(StreamInfoItem item) {
         return VOUCHED.contains(item);
     }
@@ -185,14 +238,15 @@ public final class Ranker {
 
     static int coverage(Query q, StreamInfoItem item) {
         if (vouched(item)) return q.terms.size();
-        List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
-        List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
+        List<String> words = parsed(item).titleWords;
+        List<String> channel = parsed(item).channelWords;
         int n = 0;
         for (String t : q.terms) {
             Integer times = q.repeats.get(t);
             if (times != null) {
                 if (occurrences(words, t) >= times) n++;
-            } else if (contains(words, t) || contains(channel, t) || Query.acronym(t, words) || Source.about(t, item)) {
+            } else if (contains(words, t) || contains(channel, t) || Query.acronym(t, words) || Source.about(t, item)
+                    || joined(words, t, q.terms)) {
                 n++;
             }
         }
@@ -207,8 +261,8 @@ public final class Ranker {
 
     static boolean mentions(Query q, StreamInfoItem item) {
         if (q.terms.isEmpty() || vouched(item)) return true;
-        List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
-        List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
+        List<String> words = parsed(item).titleWords;
+        List<String> channel = parsed(item).channelWords;
         for (String t : q.terms) {
             if (contains(words, t) || contains(channel, t) || Query.acronym(t, words) || Source.about(t, item)) return true;
         }
@@ -243,7 +297,7 @@ public final class Ranker {
         List<StreamInfoItem> out = new ArrayList<>(items.size());
         java.util.Map<String, List<StreamInfoItem>> seen = new java.util.HashMap<>();
         for (StreamInfoItem item : items) {
-            String key = duplicateKey(item.getName());
+            String key = parsed(item).duplicateKey();
             if (key.length() < 12) {
                 out.add(item);
                 continue;
@@ -335,8 +389,8 @@ public final class Ranker {
                 int hit = 0;
                 for (int i = 0; i < n; i++) {
                     StreamInfoItem item = list.get(i);
-                    List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
-                    List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
+                    List<String> words = parsed(item).titleWords;
+                    List<String> channel = parsed(item).channelWords;
                     if (contains(words, term) || contains(channel, term) || Query.acronym(term, words)) hit++;
                 }
                 if (hit * 5 >= n * 3) anchored.add(term);
@@ -374,7 +428,7 @@ public final class Ranker {
                 used++;
                 double w = 1.0 / (1 + rank * 0.3);
                 sum += w;
-                for (String word : new java.util.HashSet<>(keyTerms(Query.words(Query.fold(item.getName() == null ? "" : item.getName()))))) {
+                for (String word : new java.util.HashSet<>(keyTerms(parsed(item).titleWords))) {
                     if (Query.isStop(word) || queryForm(q, word)) continue;
                     mass.merge(word, w, Double::sum);
                 }
@@ -434,8 +488,8 @@ public final class Ranker {
         int[] covered = new int[q.terms.size()];
         for (int i = 0; i < n; i++) {
             StreamInfoItem item = primary.get(i);
-            List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
-            List<String> channel = Query.words(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
+            List<String> words = parsed(item).titleWords;
+            List<String> channel = parsed(item).channelWords;
             boolean any = false;
             for (int t = 0; t < q.terms.size(); t++) {
                 String term = q.terms.get(t);
@@ -463,10 +517,11 @@ public final class Ranker {
     }
 
     static double score(Query q, Context ctx, StreamInfoItem item, int rank, double weight) {
-        String title = Query.fold(item.getName() == null ? "" : item.getName());
-        String channel = Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName());
-        List<String> titleWords = Query.words(title);
-        List<String> channelWords = Query.words(channel);
+        Parsed text = parsed(item);
+        String title = text.title;
+        String channel = text.channel;
+        List<String> titleWords = text.titleWords;
+        List<String> channelWords = text.channelWords;
 
         for (String x : q.excluded) {
             if (contains(titleWords, x) || contains(channelWords, x)) return Double.NEGATIVE_INFINITY;
@@ -493,7 +548,7 @@ public final class Ranker {
         int anchoredMatched = 0;
         boolean vouched = vouched(item);
         for (String t : q.terms) {
-            boolean inTitle = contains(titleWords, t) || Query.acronym(t, titleWords);
+            boolean inTitle = contains(titleWords, t) || Query.acronym(t, titleWords) || joined(titleWords, t, q.terms);
             boolean inChannel = contains(channelWords, t) || !inTitle && (vouched || Source.about(t, item));
             if (inTitle) s += 3;
             if (inChannel) s += 2;
@@ -556,6 +611,22 @@ public final class Ranker {
 
     private static boolean contains(List<String> words, String term) {
         for (String w : words) if (Query.wordMatches(term, w)) return true;
+        return false;
+    }
+
+    private static boolean joined(List<String> words, String term, List<String> terms) {
+        if (terms.size() < 2 || term.length() < 3) return false;
+        for (String w : words) {
+            if (w.length() > term.length() && w.contains(term) && madeOf(w, terms)) return true;
+        }
+        return false;
+    }
+
+    private static boolean madeOf(String word, List<String> terms) {
+        if (word.isEmpty()) return true;
+        for (String t : terms) {
+            if (t.length() >= 2 && word.startsWith(t) && madeOf(word.substring(t.length()), terms)) return true;
+        }
         return false;
     }
 
@@ -643,6 +714,12 @@ public final class Ranker {
     public static List<StreamInfoItem> similar(String title, String channel, String selfUrl,
                                                List<StreamInfoItem> next, List<StreamInfoItem> search,
                                                boolean trustNext, int minimum) {
+        return similar(title, channel, selfUrl, next, search, trustNext, minimum, null);
+    }
+
+    public static List<StreamInfoItem> similar(String title, String channel, String selfUrl,
+                                               List<StreamInfoItem> next, List<StreamInfoItem> search,
+                                               boolean trustNext, int minimum, List<StreamInfoItem> spare) {
         List<String> keys = keyTerms(Query.parse(title).terms);
         int needed = keys.size() >= 3 ? 2 : 1;
         java.util.Map<String, String> numbers = numbered(Query.words(Query.fold(title)));
@@ -652,6 +729,7 @@ public final class Ranker {
         seen.add(selfUrl);
         int order = 0;
         List<StreamInfoItem> weak = new ArrayList<>();
+        List<Scored> loose = new ArrayList<>();
         List<List<StreamInfoItem>> sources = java.util.Arrays.asList(next, search);
         double[] weights = {1.0, 0.8};
         for (int src = 0; src < sources.size(); src++) {
@@ -660,7 +738,7 @@ public final class Ranker {
             for (int rank = 0; rank < list.size(); rank++) {
                 StreamInfoItem item = list.get(rank);
                 if (!seen.add(item.getUrl()) || NotInterested.hides(item)) continue;
-                List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
+                List<String> words = parsed(item).titleWords;
                 int overlap = 0;
                 for (String t : keys) {
                     for (String w : words) {
@@ -673,7 +751,8 @@ public final class Ranker {
                 boolean sameChannel = !ownChannel.isEmpty()
                         && ownChannel.equals(Query.fold(item.getUploaderName() == null ? "" : item.getUploaderName()));
                 if (!sameChannel && overlap < (trusted ? 1 : needed)) {
-                    if (src == 0 || tagBased(item)) weak.add(item);
+                    if (tagBased(item)) weak.add(item);
+                    else if (src == 1 && overlap > 0) loose.add(new Scored(item, overlap * 3 + 4.0 * weights[src] / (1 + rank * 0.3), order++));
                     continue;
                 }
                 double s = overlap * 3 + (sameChannel ? 4 : 0) + 4.0 * weights[src] / (1 + rank * 0.3);
@@ -692,8 +771,14 @@ public final class Ranker {
         }
         Collections.sort(all, (a, b) -> a.covered != b.covered ? b.covered - a.covered
                 : a.score != b.score ? Double.compare(b.score, a.score) : a.order - b.order);
-        List<StreamInfoItem> out = new ArrayList<>(all.size());
+        List<StreamInfoItem> out = new ArrayList<>(all.size() + loose.size());
         for (Scored s : all) out.add(s.item);
+        Collections.sort(loose, (a, b) -> a.score != b.score ? Double.compare(b.score, a.score) : a.order - b.order);
+        for (Scored s : loose) if (sameScript(title, s.item.getName())) out.add(s.item);
+        if (spare != null) {
+            for (StreamInfoItem w : weak) if (sameScript(title, w.getName())) spare.add(w);
+            return out;
+        }
         for (int i = 0; out.size() < minimum && i < weak.size(); i++) {
             if (sameScript(title, weak.get(i).getName())) out.add(weak.get(i));
         }
@@ -732,13 +817,24 @@ public final class Ranker {
                 if (!Query.isStop(w) && !channels.contains(w)) seen.merge(w, 1, Integer::sum);
             }
         }
-        for (java.util.Map.Entry<String, Integer> e : seen.entrySet()) if (e.getValue() >= 2) topic.add(e.getKey());
-        List<String> words = Query.words(Query.fold(item.getName() == null ? "" : item.getName()));
+        List<String> words = parsed(item).titleWords;
         for (String t : topic) {
             for (String w : words) if (sameWord(t, w)) return true;
         }
+        int echoes = 0;
+        for (java.util.Map.Entry<String, Integer> e : seen.entrySet()) {
+            if (e.getValue() < 2 || topic.contains(e.getKey())) continue;
+            for (String w : words) {
+                if (sameWord(e.getKey(), w)) {
+                    if (++echoes >= TOPIC_ECHOES) return true;
+                    break;
+                }
+            }
+        }
         return false;
     }
+
+    private static final int TOPIC_ECHOES = 2;
 
     private static boolean tagBased(StreamInfoItem item) {
         com.orvid.ext.ExtSource ext = com.orvid.ext.Registry.forUrl(item.getUrl());

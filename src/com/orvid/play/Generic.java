@@ -48,9 +48,12 @@ public final class Generic {
             if (referer != null) headers.put("Referer", referer);
             String html = com.orvid.adult.Web.get(circuit, page, "embed", headers);
             if (title.isEmpty()) title = title(html);
-            String stream = stream(html, page);
+            String[] stream = stream(html, page);
             if (stream != null) {
-                Direct d = new Direct(title, "", stream, stream.contains(".m3u8"), page);
+                Direct d = new Direct(title, "", stream[0], stream[0].contains(".m3u8"), page);
+                if (d.hls && stream[1] != null) d.fallback = stream[1];
+                Storyboard.Spec sprite = Storyboard.timeline(html, page);
+                if (sprite != null) d.sprite(sprite);
                 return d;
             }
             Matcher f = IFRAME.matcher(html);
@@ -61,7 +64,7 @@ public final class Generic {
         throw new IOException("no stream in embed");
     }
 
-    static String stream(String html, String page) {
+    static String[] stream(String html, String page) {
         List<String> found = new ArrayList<>();
         Matcher kvs = KVS.matcher(html);
         Matcher lic = LICENSE.matcher(html);
@@ -74,14 +77,16 @@ public final class Generic {
             Matcher m = p.matcher(html);
             while (m.find()) found.add(m.group(1));
         }
+        String hls = null;
         String mp4 = null;
         for (String raw : found) {
             String u = absolute(raw.replace("\\/", "/").replace("&amp;", "&"), page);
             if (!u.startsWith("http")) continue;
-            if (u.contains(".m3u8")) return u;
+            if (hls == null && u.contains(".m3u8")) hls = u;
             if (mp4 == null && (u.contains(".mp4") || u.contains("/get_file/"))) mp4 = u;
         }
-        return mp4;
+        if (hls != null) return new String[]{hls, mp4};
+        return mp4 == null ? null : new String[]{mp4, null};
     }
 
     private static String title(String html) {

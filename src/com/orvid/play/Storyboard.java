@@ -49,6 +49,14 @@ public final class Storyboard implements Frames {
     private final String circuit;
     private int start;
     private String referer;
+    private Storyboard coarse;
+    private boolean prefetched;
+    private volatile boolean stopped;
+
+    private static final int COARSE_SHEETS = 2;
+    private static final int PREFETCH_SHEETS = 12;
+    private static final int PREFETCH_SINGLES = 30;
+    private static final long PREFETCH_DELAY_MS = 3000;
 
     private Storyboard(String url, int width, int height, int count, int cols, int rows, long durationMs, String circuit) {
         this.url = url;
@@ -120,20 +128,41 @@ public final class Storyboard implements Frames {
     }
 
     public static int probeCount(Spec spec, String circuit) {
-        if (!exists(spec, 3, circuit)) return 0;
-        int lo = 3;
-        int hi = 6;
-        while (hi <= 64 && exists(spec, hi, circuit)) {
-            lo = hi;
-            hi *= 2;
+        return FrameCount.count(n -> exists(spec, n, circuit));
+    }
+
+    private static final java.util.regex.Pattern TIMELINE = java.util.regex.Pattern.compile(
+            "timeline_screens_url\\s*:\\s*'([^']*\\{time\\}[^']*)'");
+    private static final java.util.regex.Pattern TIMELINE_COUNT = java.util.regex.Pattern.compile(
+            "timeline_screens_count\\s*:\\s*'(\\d+)'");
+    private static final java.util.regex.Pattern FRAME_SIZE = java.util.regex.Pattern.compile("/(\\d{2,4})x(\\d{2,4})/");
+
+    public static Spec timeline(String html, String page) {
+        if (html == null) return null;
+        java.util.regex.Matcher u = TIMELINE.matcher(html);
+        java.util.regex.Matcher n = TIMELINE_COUNT.matcher(html);
+        if (!u.find() || !n.find()) return null;
+        int count;
+        try {
+            count = Integer.parseInt(n.group(1));
+        } catch (NumberFormatException e) {
+            return null;
         }
-        hi = Math.min(hi, 65);
-        while (hi - lo > 1) {
-            int mid = (lo + hi) / 2;
-            if (exists(spec, mid, circuit)) lo = mid;
-            else hi = mid;
+        if (count < 3) return null;
+        String url = u.group(1).replace("\\/", "/");
+        if (url.startsWith("//")) url = "https:" + url;
+        else if (!url.startsWith("http") && page != null) url = java.net.URI.create(page).resolve(url).toString();
+        if (!url.startsWith("http")) return null;
+        java.util.regex.Matcher size = FRAME_SIZE.matcher(url);
+        int w = 182;
+        int h = 100;
+        if (size.find()) {
+            w = Integer.parseInt(size.group(1));
+            h = Integer.parseInt(size.group(2));
         }
-        return lo;
+        Spec spec = new Spec(url.replace("{time}", "$M"), w, h, 1, 1, count);
+        spec.start = 1;
+        return spec;
     }
 
     public static Spec screens(String cover) {
@@ -153,6 +182,7 @@ public final class Storyboard implements Frames {
         if (parts.length < 2) return null;
         String base = parts[0].startsWith("http") ? parts[0] : "https://i.ytimg.com/" + parts[0];
         Storyboard best = null;
+        Storyboard rough = null;
         for (int level = 1; level < parts.length; level++) {
             String[] a = parts[level].split("#");
             if (a.length != 8) continue;
@@ -164,11 +194,52 @@ public final class Storyboard implements Frames {
                 int r = Integer.parseInt(a[4]);
                 if (w <= 0 || n <= 0 || c <= 0 || r <= 0) continue;
                 String u = base.replace("$L", Integer.toString(level - 1)).replace("$N", a[6]) + "&sigh=" + a[7];
-                if (best == null || w > best.width) best = new Storyboard(u, w, h, n, c, r, durationMs, circuit);
+                Storyboard sb = new Storyboard(u, w, h, n, c, r, durationMs, circuit);
+                if (best == null || w > best.width) best = sb;
+                boolean few = sb.sheets() <= COARSE_SHEETS;
+                if (rough == null || (few ? rough.sheets() > COARSE_SHEETS || w > rough.width : sb.sheets() < rough.sheets())) rough = sb;
             } catch (NumberFormatException ignored) {
             }
         }
+        if (best != null && rough != best && rough.sheets() < best.sheets()) best.coarse = rough;
         return best;
+    }
+
+    private int sheets() {
+        int perSheet = cols * rows;
+        return (count + perSheet - 1) / perSheet;
+    }
+
+    @Override
+    public void stop() {
+        stopped = true;
+    }
+
+    public void prefetch() {
+        if (prefetched) return;
+        prefetched = true;
+        if (coarse != null && coarse.sheets() <= COARSE_SHEETS) {
+            for (int i = coarse.sheets() - 1; i >= 0; i--) coarse.load(coarse.sheetUrl(i), null);
+        }
+        MAIN.postDelayed(() -> {
+            if (stopped) return;
+            int sheets = sheets();
+            boolean singles = cols * rows == 1;
+            if (sheets > PREFETCH_SHEETS && !singles) return;
+            int take = Math.min(sheets, singles ? PREFETCH_SINGLES : PREFETCH_SHEETS);
+            for (int i = take - 1; i >= 0; i--) load(sheetUrl(take == sheets ? i : i * (sheets - 1) / (take - 1)), null);
+        }, PREFETCH_DELAY_MS);
+    }
+
+    private Bitmap nearest(int sheet, int index) {
+        if (cols * rows > 1) return null;
+        int sheets = sheets();
+        for (int d = 1; d < sheets; d++) {
+            Bitmap bmp = sheet - d >= 0 ? SHEETS.get(sheetUrl(sheet - d)) : null;
+            if (bmp == null && sheet + d < sheets) bmp = SHEETS.get(sheetUrl(sheet + d));
+            if (bmp != null) return crop(bmp, index);
+        }
+        return null;
     }
 
     public long duration() {
@@ -192,13 +263,24 @@ public final class Storyboard implements Frames {
         if (cached != null) {
             Bitmap frame = crop(cached, index);
             if (frame != null) callback.frame(frame);
-        } else {
-            load(sheetUrl, () -> {
-                Bitmap bmp = sheet(sheetUrl);
-                Bitmap frame = bmp == null ? null : crop(bmp, index);
-                if (frame != null) callback.frame(frame);
-            });
+            return;
         }
+        final boolean[] sharp = new boolean[1];
+        if (coarse != null) {
+            coarse.frameAt(ms, bmp -> {
+                if (!sharp[0]) callback.frame(bmp);
+            });
+        } else {
+            Bitmap near = nearest(sheet, index);
+            if (near != null) callback.frame(near);
+        }
+        load(sheetUrl, () -> {
+            Bitmap bmp = sheet(sheetUrl);
+            Bitmap frame = bmp == null ? null : crop(bmp, index);
+            if (frame == null) return;
+            sharp[0] = true;
+            callback.frame(frame);
+        });
     }
 
     private String sheetUrl(int sheet) {
@@ -210,9 +292,20 @@ public final class Storyboard implements Frames {
         if (bmp != null) return bmp;
         byte[] data = FILES.get(sheetUrl);
         if (data == null) return null;
-        bmp = BitmapFactory.decodeByteArray(data, 0, data.length);
+        bmp = decode(data);
         if (bmp != null) SHEETS.put(sheetUrl, bmp);
         return bmp;
+    }
+
+    private static Bitmap decode(byte[] data) {
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inPreferredConfig = Bitmap.Config.RGB_565;
+        return BitmapFactory.decodeByteArray(data, 0, data.length, o);
+    }
+
+    private String via(String sheetUrl) {
+        String host = java.net.URI.create(sheetUrl).getHost();
+        return host != null && host.endsWith("ytimg.com") ? com.orvid.image.Images.circuit(sheetUrl) : circuit;
     }
 
     private void load(String sheetUrl, Runnable done) {
@@ -232,8 +325,17 @@ public final class Storyboard implements Frames {
         }
         POOL.execute(() -> {
             try {
-                byte[] data = Fetch.on(circuit, () -> referer == null ? Fetch.bytes(sheetUrl) : Fetch.bytes(sheetUrl, referer));
+                String first = via(sheetUrl);
+                byte[] data;
+                try {
+                    data = Fetch.on(first, () -> referer == null ? Fetch.bytes(sheetUrl) : Fetch.bytes(sheetUrl, referer));
+                } catch (Exception e) {
+                    if (first.equals(circuit)) throw e;
+                    data = Fetch.on(circuit, () -> referer == null ? Fetch.bytes(sheetUrl) : Fetch.bytes(sheetUrl, referer));
+                }
                 FILES.put(sheetUrl, data);
+                Bitmap bmp = decode(data);
+                if (bmp != null) SHEETS.put(sheetUrl, bmp);
             } catch (Exception ignored) {
             }
             java.util.List<Runnable> waiting;

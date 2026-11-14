@@ -16,6 +16,7 @@ public final class Health {
     private static final int DOWN_AT = 5;
     private static final int EMPTY_AT = 3;
     private static final long RETRY_MS = 6 * 60 * 60 * 1000L;
+    private static final long FIRST_RETRY_MS = 30 * 60 * 1000L;
     private static final long LIMIT_MS = 15 * 60 * 1000L;
     private static final java.util.Map<String, Long> LIMITED_AT = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -38,9 +39,11 @@ public final class Health {
     public static synchronized boolean skip(String key) {
         SharedPreferences p = prefs();
         if (limitedNow(key)) return true;
-        if (p.getInt(key + ".fails", 0) < DOWN_AT) return false;
+        int fails = p.getInt(key + ".fails", 0);
+        if (fails < DOWN_AT) return false;
         long now = System.currentTimeMillis();
-        if (now - p.getLong(key + ".tried", 0) < RETRY_MS) return true;
+        long wait = Math.min(RETRY_MS, FIRST_RETRY_MS << Math.min(8, fails - DOWN_AT));
+        if (now - p.getLong(key + ".tried", 0) < wait) return true;
         p.edit().putLong(key + ".tried", now).apply();
         return false;
     }

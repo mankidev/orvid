@@ -22,6 +22,8 @@ public final class FrameGrab implements Frames {
     private static final int BUCKETS = 120;
     private static final int BLOCK = 128 * 1024;
     private static final int BLOCKS_MAX = 96;
+    private static final int BLOCK_RUN = 8;
+    private static final int GRAB_HEIGHT = 240;
     private static final int FRAME_WIDTH = 320;
     private static final long IDLE_MS = 20000;
     private static final int SEGMENT_MAX = 12 * 1024 * 1024;
@@ -30,21 +32,15 @@ public final class FrameGrab implements Frames {
     private static final long PREFETCH_DELAY_MS = 3000;
     private static final int[] PREFETCH_ORDER = prefetchOrder();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static final int PREFETCH_LANES = 2;
 
-    private final String url;
+    private final String mainUrl;
     private final boolean hls;
     private final String referer;
     private final String cookie;
     private final String circuit;
     private final long durationMs;
     private final float aspect;
-    private final java.util.concurrent.ThreadPoolExecutor worker = new java.util.concurrent.ThreadPoolExecutor(1, 1,
-            30, java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.LinkedBlockingQueue<>(),
-            r -> {
-                Thread t = new Thread(r, "orvid-frame-grab");
-                t.setDaemon(true);
-                return t;
-            });
     private final LruCache<Integer, Bitmap> frames = new LruCache<Integer, Bitmap>(8 * 1024 * 1024) {
         @Override
         protected int sizeOf(Integer key, Bitmap value) {
@@ -53,17 +49,19 @@ public final class FrameGrab implements Frames {
     };
     private final Object lock = new Object();
     private int wanted = -1;
-    private int prefetched;
     private Storyboard.Callback waiting;
-    private boolean running;
+    private boolean urgentRunning;
+    private boolean prefetchStarted;
+    private int prefetched;
+    private final java.util.Set<Integer> grabbing = new java.util.HashSet<>();
+    private final java.util.Map<Integer, List<Storyboard.Callback>> waiters = new java.util.HashMap<>();
     private volatile boolean broken;
-
-    private MediaMetadataRetriever retriever;
-    private long usedAt;
-    private final Runnable idle = this::closeIfIdle;
+    private volatile Media media;
+    private final Lane urgent = new Lane("orvid-frame-now");
+    private final Lane[] ahead = new Lane[PREFETCH_LANES];
 
     private List<Segment> segments;
-    private byte[] init;
+    private volatile byte[] init;
 
     private static final class Segment {
         final String url;
@@ -79,15 +77,99 @@ public final class FrameGrab implements Frames {
         }
     }
 
+    private final class Media {
+        final String url;
+        final RangeBlocks blocks;
+        volatile long size = -1;
+
+        Media(String url) {
+            this.url = url;
+            this.blocks = new RangeBlocks((from, length) -> fetchRange(this, from, length), BLOCK, BLOCK_RUN, BLOCKS_MAX);
+        }
+    }
+
+    private final class Lane {
+        final java.util.concurrent.ThreadPoolExecutor exec;
+        final String name;
+        MediaMetadataRetriever retriever;
+        Media opened;
+        long usedAt;
+        final Runnable idle = this::closeIfIdle;
+
+        Lane(String name) {
+            this.name = name;
+            exec = new java.util.concurrent.ThreadPoolExecutor(1, 1, 30, java.util.concurrent.TimeUnit.SECONDS,
+                    new java.util.concurrent.LinkedBlockingQueue<>(), r -> {
+                        Thread t = new Thread(r, name);
+                        t.setDaemon(true);
+                        return t;
+                    });
+            exec.allowCoreThreadTimeOut(true);
+        }
+
+        Bitmap file(Media m, long ms) throws IOException {
+            if (retriever == null || opened != m) {
+                close();
+                retriever = new MediaMetadataRetriever();
+                try {
+                    retriever.setDataSource(new RangeSource(m));
+                    opened = m;
+                } catch (RuntimeException e) {
+                    close();
+                    throw new Unsupported("retriever " + e.getMessage());
+                }
+            }
+            touch();
+            return grab(retriever, ms * 1000);
+        }
+
+        void touch() {
+            usedAt = android.os.SystemClock.uptimeMillis();
+            MAIN.removeCallbacks(idle);
+            MAIN.postDelayed(idle, IDLE_MS);
+        }
+
+        void closeIfIdle() {
+            exec.execute(() -> {
+                if (android.os.SystemClock.uptimeMillis() - usedAt >= IDLE_MS) close();
+            });
+        }
+
+        void close() {
+            if (retriever != null) {
+                try {
+                    retriever.release();
+                } catch (Exception ignored) {
+                }
+            }
+            retriever = null;
+            opened = null;
+        }
+    }
+
     public FrameGrab(Direct d, String circuit, long durationMs, float aspect) {
-        this.url = d.url;
+        this.mainUrl = d.url;
         this.hls = d.hls;
         this.referer = d.referer;
         this.cookie = d.cookie;
         this.circuit = circuit;
         this.durationMs = durationMs;
         this.aspect = aspect;
+        this.media = new Media(lightest(d));
+        for (int i = 0; i < ahead.length; i++) ahead[i] = new Lane("orvid-frame-ahead-" + i);
         MAIN.postDelayed(this::startPrefetch, PREFETCH_DELAY_MS);
+    }
+
+    private static String lightest(Direct d) {
+        if (d.hls) return d.url;
+        String pick = d.url;
+        int height = Integer.MAX_VALUE;
+        for (Direct.Variant v : d.variants) {
+            if (v.hls || v.height < GRAB_HEIGHT || v.height >= height) continue;
+            height = v.height;
+            pick = v.url;
+        }
+        return pick;
     }
 
     private static int[] prefetchOrder() {
@@ -110,16 +192,16 @@ public final class FrameGrab implements Frames {
 
     private void startPrefetch() {
         synchronized (lock) {
-            if (running || broken) return;
-            running = true;
+            if (prefetchStarted || broken) return;
+            prefetchStarted = true;
         }
-        worker.execute(this::drain);
+        for (Lane lane : ahead) lane.exec.execute(() -> drainAhead(lane));
     }
 
     private int nextPrefetch() {
         while (prefetched < PREFETCH_ORDER.length) {
             int bucket = PREFETCH_ORDER[prefetched++];
-            if (frames.get(bucket) == null) return bucket;
+            if (frames.get(bucket) == null && !grabbing.contains(bucket)) return bucket;
         }
         return -1;
     }
@@ -157,52 +239,84 @@ public final class FrameGrab implements Frames {
         synchronized (lock) {
             wanted = bucket;
             waiting = callback;
-            if (running) return;
-            running = true;
+            if (urgentRunning) return;
+            urgentRunning = true;
         }
-        worker.execute(this::drain);
+        urgent.exec.execute(this::drainUrgent);
     }
 
-    private void drain() {
+    private void drainUrgent() {
         while (true) {
             int bucket;
-            Storyboard.Callback callback;
             synchronized (lock) {
-                if (broken) {
-                    running = false;
+                if (broken || wanted < 0) {
+                    urgentRunning = false;
                     return;
                 }
-                if (wanted >= 0) {
-                    bucket = wanted;
-                    callback = waiting;
-                    wanted = -1;
-                    waiting = null;
-                } else {
-                    bucket = nextPrefetch();
-                    callback = null;
-                    if (bucket < 0) {
-                        running = false;
-                        return;
-                    }
+                bucket = wanted;
+                Storyboard.Callback callback = waiting;
+                wanted = -1;
+                waiting = null;
+                Bitmap have = frames.get(bucket);
+                if (have != null) {
+                    MAIN.post(() -> callback.frame(have));
+                    continue;
                 }
+                waiters.computeIfAbsent(bucket, k -> new ArrayList<>()).add(callback);
+                if (!grabbing.add(bucket)) continue;
             }
-            Bitmap bmp = frames.get(bucket);
-            if (bmp == null) {
-                long at = (bucket * 2L + 1) * durationMs / (BUCKETS * 2L);
-                long began = android.os.SystemClock.uptimeMillis();
-                try {
-                    bmp = hls ? hlsFrame(at) : fileFrame(at);
-                } catch (Exception e) {
-                    Diag.mark("frame grab FAIL " + e);
-                    if (e instanceof Unsupported) broken = true;
-                }
-                if (bmp != null) {
-                    frames.put(bucket, bmp);
-                    Diag.mark("frame grab " + at / 1000 + "s " + (android.os.SystemClock.uptimeMillis() - began) + "ms");
-                }
+            grabOn(urgent, bucket);
+        }
+    }
+
+    private void drainAhead(Lane lane) {
+        while (true) {
+            int bucket;
+            synchronized (lock) {
+                bucket = broken ? -1 : nextPrefetch();
+                if (bucket < 0) return;
+                grabbing.add(bucket);
             }
-            final Bitmap shown = bmp;
-            if (shown != null && callback != null) MAIN.post(() -> callback.frame(shown));
+            grabOn(lane, bucket);
+        }
+    }
+
+    private void grabOn(Lane lane, int bucket) {
+        Bitmap bmp = frames.get(bucket);
+        if (bmp == null && !broken) {
+            long at = (bucket * 2L + 1) * durationMs / (BUCKETS * 2L);
+            long began = android.os.SystemClock.uptimeMillis();
+            Media used = media;
+            try {
+                bmp = hls ? hlsFrame(at) : lane.file(used, at);
+            } catch (Exception e) {
+                Diag.mark("frame grab FAIL " + e);
+                failed(used, e);
+            }
+            if (bmp != null) {
+                frames.put(bucket, bmp);
+                Diag.mark("frame grab " + lane.name + " " + at / 1000 + "s " + (android.os.SystemClock.uptimeMillis() - began) + "ms");
+            }
+        }
+        List<Storyboard.Callback> callbacks;
+        synchronized (lock) {
+            grabbing.remove(bucket);
+            callbacks = waiters.remove(bucket);
+        }
+        final Bitmap shown = bmp;
+        if (shown == null || callbacks == null) return;
+        MAIN.post(() -> {
+            for (Storyboard.Callback c : callbacks) c.frame(shown);
+        });
+    }
+
+    private void failed(Media used, Exception e) {
+        synchronized (lock) {
+            if (!hls && !used.url.equals(mainUrl)) {
+                if (media == used) media = new Media(mainUrl);
+                return;
+            }
+            if (e instanceof Unsupported) broken = true;
         }
     }
 
@@ -212,25 +326,18 @@ public final class FrameGrab implements Frames {
         }
     }
 
-    private Bitmap fileFrame(long ms) throws IOException {
-        if (retriever == null) {
-            retriever = new MediaMetadataRetriever();
-            try {
-                retriever.setDataSource(new RangeSource());
-            } catch (RuntimeException e) {
-                close();
-                throw new Unsupported("retriever " + e.getMessage());
-            }
+    private List<Segment> segments() throws IOException {
+        synchronized (this) {
+            if (segments == null) segments = playlist(mainUrl, 0);
+            return segments;
         }
-        touch();
-        return grab(retriever, ms * 1000);
     }
 
     private Bitmap hlsFrame(long ms) throws IOException {
-        if (segments == null) segments = playlist(url, 0);
-        if (segments.isEmpty()) throw new Unsupported("no segments");
-        Segment s = segments.get(0);
-        for (Segment c : segments) {
+        List<Segment> list = segments();
+        if (list.isEmpty()) throw new Unsupported("no segments");
+        Segment s = list.get(0);
+        for (Segment c : list) {
             if (c.start <= ms) s = c;
             else break;
         }
@@ -428,28 +535,6 @@ public final class FrameGrab implements Frames {
         return buf.toByteArray();
     }
 
-    private void touch() {
-        usedAt = android.os.SystemClock.uptimeMillis();
-        MAIN.removeCallbacks(idle);
-        MAIN.postDelayed(idle, IDLE_MS);
-    }
-
-    private void closeIfIdle() {
-        worker.execute(() -> {
-            if (android.os.SystemClock.uptimeMillis() - usedAt >= IDLE_MS) close();
-        });
-    }
-
-    private void close() {
-        if (retriever != null) {
-            try {
-                retriever.release();
-            } catch (Exception ignored) {
-            }
-        }
-        retriever = null;
-    }
-
     private static final class BytesSource extends MediaDataSource {
         private final byte[] data;
 
@@ -475,64 +560,58 @@ public final class FrameGrab implements Frames {
         }
     }
 
-    private final class RangeSource extends MediaDataSource {
-        private long size = -1;
-        private final LruCache<Long, byte[]> blocks = new LruCache<>(BLOCKS_MAX);
+    private byte[] fetchRange(Media m, long start, long length) throws IOException {
+        try {
+            return Fetch.on(circuit, () -> {
+                HttpURLConnection c = request(m.url, start, length);
+                int code = c.getResponseCode();
+                if (code != 206 && !(code == 200 && start == 0)) {
+                    Fetch.readBody(c);
+                    throw new Unsupported("range HTTP " + code);
+                }
+                if (m.size < 0) m.size = total(c);
+                try (InputStream in = c.getInputStream()) {
+                    return read(in, length);
+                }
+            });
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
+    }
+
+    private static long total(HttpURLConnection c) {
+        String range = c.getHeaderField("Content-Range");
+        if (range != null && range.contains("/")) {
+            try {
+                return Long.parseLong(range.substring(range.lastIndexOf('/') + 1).trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return -1;
+    }
+
+    private static final class RangeSource extends MediaDataSource {
+        private final Media media;
+        private final RangeBlocks.Reader reader;
+
+        RangeSource(Media media) {
+            this.media = media;
+            this.reader = media.blocks.reader();
+        }
 
         @Override
         public int readAt(long position, byte[] buffer, int offset, int length) throws IOException {
-            if (size < 0) getSize();
-            if (size >= 0 && position >= size) return -1;
-            long index = position / BLOCK;
-            byte[] block = block(index);
-            int inBlock = (int) (position - index * BLOCK);
-            if (inBlock >= block.length) return -1;
-            int n = Math.min(length, block.length - inBlock);
-            System.arraycopy(block, inBlock, buffer, offset, n);
-            return n;
-        }
-
-        private byte[] block(long index) throws IOException {
-            byte[] b = blocks.get(index);
-            if (b != null) return b;
-            long from = index * BLOCK;
-            try {
-                b = Fetch.on(circuit, () -> {
-                    HttpURLConnection c = request(url, from, BLOCK);
-                    int code = c.getResponseCode();
-                    if (code != 206 && !(code == 200 && from == 0)) {
-                        Fetch.readBody(c);
-                        throw new Unsupported("range HTTP " + code);
-                    }
-                    if (size < 0) size = total(c);
-                    try (InputStream in = c.getInputStream()) {
-                        return read(in, BLOCK);
-                    }
-                });
-            } catch (IOException e) {
-                throw e;
-            } catch (Exception e) {
-                throw new IOException(e);
-            }
-            blocks.put(index, b);
-            return b;
-        }
-
-        private long total(HttpURLConnection c) {
-            String range = c.getHeaderField("Content-Range");
-            if (range != null && range.contains("/")) {
-                try {
-                    return Long.parseLong(range.substring(range.lastIndexOf('/') + 1).trim());
-                } catch (NumberFormatException ignored) {
-                }
-            }
-            return -1;
+            if (media.size < 0) getSize();
+            if (media.size >= 0 && position >= media.size) return -1;
+            return reader.readAt(position, buffer, offset, length);
         }
 
         @Override
         public long getSize() throws IOException {
-            if (size < 0) block(0);
-            return size;
+            if (media.size < 0) reader.readAt(0, new byte[1], 0, 1);
+            return media.size;
         }
 
         @Override

@@ -28,6 +28,7 @@ public final class HtmlTube {
         public String mp4;
         public String referer;
         public final java.util.TreeMap<Integer, String> qualities = new java.util.TreeMap<>();
+        public com.orvid.play.Storyboard.Spec sprite;
     }
 
     public final int serviceId;
@@ -151,10 +152,11 @@ public final class HtmlTube {
     }
 
     public Page search(String circuit, String query, String next) throws IOException {
-        int page = next == null ? 1 : Integer.parseInt(next);
+        boolean byLink = next != null && next.startsWith("http");
+        int page = next == null ? 1 : byLink ? 2 : Integer.parseInt(next);
         String q = URLEncoder.encode(query, "UTF-8");
         String qPath = q.replace("+", "-");
-        String url = (page > 1 ? laterPage : firstPage).replace("{q}", q).replace("{qp}", qPath)
+        String url = byLink ? next : (page > 1 ? laterPage : firstPage).replace("{q}", q).replace("{qp}", qPath)
                 .replace("{p}", Integer.toString(page));
         String html = Web.get(circuit, url, "tube search " + URI.create(site).getHost(), null, timeoutMs);
         Page p = new Page();
@@ -171,12 +173,34 @@ public final class HtmlTube {
         Matcher pt = PAGE_TITLE.matcher(html);
         com.orvid.net.Trace.page("HTML " + html.length() / 1024 + " KB, " + (cards.length - 1) + " \u2192 " + p.items.size()
                 + (pt.find() ? ", \"" + Web.unescape(pt.group(1).trim()) + "\"" : ""));
-        if (!p.items.isEmpty() && (paged || linksTo(html, q, qPath, page + 1)
+        if (p.items.isEmpty()) return p;
+        if (!paged && !laterPage.contains("{p}")) {
+            p.next = relNext(html, url, q, qPath);
+        } else if (paged || linksTo(html, q, qPath, page + 1)
                 || linksTo(html, q, query.trim(), page + 1)
-                || linksTo(html, q, query.trim().replace(" ", "%20"), page + 1))) {
+                || linksTo(html, q, query.trim().replace(" ", "%20"), page + 1)) {
             p.next = Integer.toString(page + 1);
         }
         return p;
+    }
+
+    private static final Pattern REL_NEXT = Pattern.compile("<(?:a|link)\\b[^>]*\\brel=[\"']?next\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NEXT_HREF = Pattern.compile("\\bhref=[\"']([^\"'#]+)[\"']", Pattern.CASE_INSENSITIVE);
+
+    static String relNext(String html, String from, String q, String qPath) {
+        Matcher tag = REL_NEXT.matcher(html);
+        if (!tag.find()) return null;
+        Matcher href = NEXT_HREF.matcher(tag.group());
+        if (!href.find()) return null;
+        try {
+            String to = URI.create(from).resolve(Web.unescape(href.group(1).trim())).toString();
+            String low = to.toLowerCase(java.util.Locale.ROOT);
+            if (!to.startsWith("http") || to.equals(from)) return null;
+            if (!low.contains(q.toLowerCase(java.util.Locale.ROOT)) && !low.contains(qPath.toLowerCase(java.util.Locale.ROOT))) return null;
+            return to;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private boolean linksTo(String html, String q, String qPath, int page) {
@@ -314,6 +338,7 @@ public final class HtmlTube {
         }
         if (m.mp4 == null) m.mp4 = lowest;
         if (m.mp4 == null) throw new IOException("no stream");
+        m.sprite = com.orvid.play.Storyboard.timeline(html, url);
         if (followRedirect) {
             m.mp4 = unwrap(circuit, m.mp4, m.referer);
             m.qualities.clear();

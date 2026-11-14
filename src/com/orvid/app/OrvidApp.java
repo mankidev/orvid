@@ -45,7 +45,7 @@ public final class OrvidApp extends Application {
         registerActivityLifecycleCallbacks(new Background());
         NewPipe.init(Fetch.get());
         images = new Images(new File(getCacheDir(), "thumbs"));
-        com.orvid.ext.Registry.reload(extRoot());
+        com.orvid.ext.Registry.loadAsync(extRoot());
         Thread scripts = new Thread(() -> {
             for (com.orvid.ext.ExtSource s : com.orvid.ext.Registry.sources()) s.warm();
         }, "orvid-scripts");
