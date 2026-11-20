@@ -97,6 +97,7 @@ public final class Visionos {
         public String author;
         public String channelId;
         public String description;
+        public final List<String> keywords = new ArrayList<>();
         public long views = -1;
         public long lengthSeconds;
         public String storyboard;
@@ -237,6 +238,19 @@ public final class Visionos {
         }
     }
 
+    public static final class Removed extends com.orvid.net.Hedge.Final {
+        Removed(String reason) {
+            super(reason);
+        }
+    }
+
+    private static final java.util.regex.Pattern REMOVED = java.util.regex.Pattern.compile(
+            "removed by the uploader|has been removed|been terminated|no longer available|isn't available anymore|is private|has been deleted");
+
+    public static boolean removed(String reason) {
+        return reason != null && REMOVED.matcher(reason.toLowerCase(Locale.ROOT)).find();
+    }
+
     private static final class Unplayable extends IOException {
         Unplayable(String reason) {
             super(reason);
@@ -276,6 +290,11 @@ public final class Visionos {
             if ("LOGIN_REQUIRED".equals(state) && reason.toLowerCase(Locale.ROOT).contains("age")) {
                 throw new AgeRestricted();
             }
+            if (("ERROR".equals(state) || "LOGIN_REQUIRED".equals(state))
+                    && removed(reason)) {
+                com.orvid.search.Dead.add("https://www.youtube.com/watch?v=" + videoId);
+                throw new Removed(state + ": " + reason);
+            }
             throw new Unplayable(state + ": " + reason);
         }
         Video v = new Video();
@@ -285,6 +304,11 @@ public final class Visionos {
         v.author = details.getString("author", "");
         v.channelId = details.getString("channelId", null);
         v.description = details.getString("shortDescription", "");
+        JsonArray words = details.getArray("keywords");
+        for (int i = 0; i < words.size(); i++) {
+            String w = words.getString(i, "");
+            if (!w.isEmpty()) v.keywords.add(w);
+        }
         try {
             v.views = Long.parseLong(details.getString("viewCount", "-1"));
             v.lengthSeconds = Long.parseLong(details.getString("lengthSeconds", "0"));
@@ -495,7 +519,7 @@ public final class Visionos {
     }
 
     private static final String PLAYER_MASK = "playabilityStatus(status,reason),"
-            + "videoDetails(title,author,channelId,shortDescription,viewCount,lengthSeconds,isLive,isLiveContent),"
+            + "videoDetails(title,author,channelId,shortDescription,keywords,viewCount,lengthSeconds,isLive,isLiveContent),"
             + "storyboards.playerStoryboardSpecRenderer.spec,streamingData(hlsManifestUrl,formats,adaptiveFormats),"
             + "captions.playerCaptionsTracklistRenderer.captionTracks";
 

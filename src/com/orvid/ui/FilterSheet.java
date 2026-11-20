@@ -96,14 +96,20 @@ final class FilterSheet {
                     changed[0] = true;
                 });
 
-        if (com.orvid.search.Known.count() > 0) {
-            section(activity, column, R.string.hidden_videos);
-            TextView[] knownRow = new TextView[1];
-            knownRow[0] = row(activity, column, activity.getString(R.string.hidden_clear, com.orvid.search.Known.count()), R.drawable.ic_close, () -> {
-                com.orvid.search.Known.clear();
-                knownRow[0].setVisibility(android.view.View.GONE);
-                changed[0] = true;
-            });
+        if (com.orvid.search.Known.MARKED.count() > 0) {
+            section(activity, column, R.string.your_data);
+            TextView[] clearRow = new TextView[1];
+            clearRow[0] = row(activity, column, activity.getString(R.string.data_clear), R.drawable.ic_delete, () ->
+                    Panic.guard(activity, new android.app.AlertDialog.Builder(activity)
+                            .setTitle(R.string.data_clear)
+                            .setMessage(R.string.data_clear_message)
+                            .setPositiveButton(R.string.data_clear_confirm, (d, w) -> {
+                                com.orvid.search.Known.MARKED.clear();
+                                clearRow[0].setVisibility(android.view.View.GONE);
+                                changed[0] = true;
+                            })
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show()));
         }
 
         section(activity, column, R.string.repositories);
@@ -460,6 +466,7 @@ final class FilterSheet {
         column.addView(row, at, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
     }
+
 
     private static Switch source(Activity a, LinearLayout column, String name, int icon, boolean on, BoolPick pick) {
         return source(a, column, name, a.getDrawable(icon), on, pick);

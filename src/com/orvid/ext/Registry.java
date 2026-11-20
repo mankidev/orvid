@@ -120,10 +120,39 @@ public final class Registry {
                 String engine = d.getString("engine", null);
                 if (d.has("rank")) rank.put(engine != null && !d.has("script") && !d.has("html") ? engine : d.getString("id", ""), d.getInt("rank"));
                 if (engine != null && !d.has("script") && !d.has("html")) on.add(engine);
+                else if (d.has("hosts")) out.addAll(autoSources(repo, d));
                 else out.add(source(repo, d));
             } catch (Exception e) {
                 com.orvid.net.Diag.mark("source " + file + " skipped: " + e.getMessage());
             }
+        }
+        return out;
+    }
+
+    private static final Pattern AUTO_HOST = Pattern.compile("[a-z0-9.\\-]{4,80}");
+    private static final Pattern AUTO_PATH = Pattern.compile("/[^\\s]*\\{q\\}[^\\s]*");
+    private static final Pattern AUTO_SEGMENT = Pattern.compile("[a-z0-9_\\-]{1,20}");
+
+    static List<ExtSource> autoSources(File repo, JsonObject d) {
+        boolean adult = d.getBoolean("adult", false);
+        double weight = Math.max(0.1, Math.min(1.0, d.getDouble("weight", 0.4)));
+        int version = d.getInt("version", 1);
+        JsonArray hosts = d.getArray("hosts");
+        List<ExtSource> out = new ArrayList<>();
+        for (int i = 0; i < hosts.size(); i++) {
+            String[] f = hosts.getString(i, "").trim().split("\\s+");
+            if (f.length < 2 || !AUTO_HOST.matcher(f[0]).matches() || !AUTO_PATH.matcher(f[1]).matches()) continue;
+            String segment = f.length > 2 && AUTO_SEGMENT.matcher(f[2]).matches() ? f[2] : "videos";
+            String label = f[0].replaceFirst("^www\\.", "");
+            String key = label.replaceAll("[^a-z0-9]", "");
+            String id = "a-" + (key.length() > 38 ? key.substring(0, 38) : key);
+            if (!ID.matcher(id).matches()) continue;
+            int dot = label.lastIndexOf('.');
+            String name = Character.toUpperCase(label.charAt(0)) + label.substring(1, dot > 0 ? dot : label.length());
+            int serviceId = 2000 + Math.floorMod((repo.getName() + "/" + id).hashCode(), 1_000_000);
+            HtmlTube html = HtmlTube.auto(serviceId, f[0], f[1], segment);
+            out.add(new ExtSource(repo.getName(), id, name, serviceId, weight, adult, version,
+                    Pattern.compile(html.match()), false, html, null, 1));
         }
         return out;
     }

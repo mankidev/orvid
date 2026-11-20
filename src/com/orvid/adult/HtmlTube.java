@@ -34,13 +34,13 @@ public final class HtmlTube {
     public final int serviceId;
     private final String site;
     private final String firstPage;
-    private final String laterPage;
+    private volatile String laterPage;
     private final Pattern videoUrl;
-    private final String cardMarker;
-    private final Pattern href;
-    private final Pattern title;
-    private final Pattern thumb;
-    private final Pattern duration;
+    private volatile String cardMarker;
+    private volatile Pattern href;
+    private volatile Pattern title;
+    private volatile Pattern thumb;
+    private volatile Pattern duration;
     private final Pattern views;
     private Pattern iframe;
     private Pattern mustContain;
@@ -141,6 +141,63 @@ public final class HtmlTube {
         this.views = views == null ? null : Pattern.compile(views);
     }
 
+    private String segment;
+    private volatile boolean configured = true;
+    private volatile boolean pageKnown = true;
+    private volatile long failedAt;
+    private static final long AUTO_RETRY_MS = 30 * 60 * 1000L;
+
+    public static HtmlTube auto(int serviceId, String host, String path, String segment) {
+        String site = "https://" + host;
+        String first = site + (path.contains("={q}") ? path : path.replace("{q}", "{qp}"));
+        String match = AutoLayout.hostPattern(host) + "/" + Pattern.quote(segment) + "/[^\\s\"?#]+";
+        HtmlTube t = new HtmlTube(serviceId, site, first, first, match, "\u0000", "(?!)", "(?!)", "(?!)", null, null);
+        t.segment = segment;
+        t.configured = false;
+        t.pageKnown = false;
+        return t;
+    }
+
+    public String match() {
+        return videoUrl.pattern();
+    }
+
+    private void adopt(String circuit, String html) throws IOException {
+        if (configured) return;
+        synchronized (this) {
+            if (configured) return;
+            if (System.currentTimeMillis() - failedAt < AUTO_RETRY_MS) throw new IOException("unknown layout");
+            AutoLayout l = AutoLayout.detect(host(), segment, html);
+            if (l == null) {
+                try {
+                    l = AutoLayout.detect(host(), segment, Web.get(circuit, site + "/", "tube home " + host(), null, timeoutMs));
+                } catch (IOException e) {
+                    failedAt = System.currentTimeMillis();
+                    throw e;
+                }
+            }
+            if (l == null) {
+                failedAt = System.currentTimeMillis();
+                throw new IOException("unknown layout");
+            }
+            href = Pattern.compile(l.href);
+            title = Pattern.compile(l.title);
+            thumb = Pattern.compile(l.thumb);
+            duration = l.duration == null ? null : Pattern.compile(l.duration);
+            cardMarker = l.card;
+            configured = true;
+        }
+    }
+
+    private void learnPaging(String html, String q, String qPath) {
+        if (pageKnown) return;
+        String later = AutoLayout.laterPage(html, firstPage, site, q, qPath);
+        if (later == null) return;
+        laterPage = later;
+        paged = true;
+        pageKnown = true;
+    }
+
     public boolean handles(String url) {
         return url != null && videoUrl.matcher(url).find();
     }
@@ -159,6 +216,8 @@ public final class HtmlTube {
         String url = byLink ? next : (page > 1 ? laterPage : firstPage).replace("{q}", q).replace("{qp}", qPath)
                 .replace("{p}", Integer.toString(page));
         String html = Web.get(circuit, url, "tube search " + URI.create(site).getHost(), null, timeoutMs);
+        adopt(circuit, html);
+        if (page == 1 && !byLink) learnPaging(html, q, qPath);
         Page p = new Page();
         String[] cards = parse(html, p);
         if (p.items.isEmpty() && page == 1 && searchFallback != null) {
@@ -181,6 +240,45 @@ public final class HtmlTube {
                 || linksTo(html, q, query.trim().replace(" ", "%20"), page + 1)) {
             p.next = Integer.toString(page + 1);
         }
+        return p;
+    }
+
+    private static final Pattern KVS_SEARCH = Pattern.compile("https?://[^/]+/search/\\{qp?\\}/");
+    private static final Pattern TAG_WORD = Pattern.compile("[a-z0-9]{3,30}");
+    private static final int TAG_UNKNOWN = 0;
+    private static final int TAG_TAGS = 1;
+    private static final int TAG_CATEGORIES = 2;
+    private volatile int tagPath = TAG_UNKNOWN;
+
+    public String tagFor(String query) {
+        if (!KVS_SEARCH.matcher(firstPage).matches()) return null;
+        com.orvid.search.Query q = com.orvid.search.Query.parse(query);
+        if (q.terms.size() != 1 || !q.phrases.isEmpty() || !q.excluded.isEmpty() || q.channel != null) return null;
+        String word = q.terms.get(0);
+        return TAG_WORD.matcher(word).matches() ? word : null;
+    }
+
+    public List<StreamInfoItem> tagged(String circuit, String tag) throws IOException {
+        String base = site.replaceAll("/+$", "");
+        int path = tagPath;
+        if (path != TAG_CATEGORIES) {
+            try {
+                List<StreamInfoItem> items = listing(circuit, base + "/tags/" + tag + "/").items;
+                tagPath = TAG_TAGS;
+                return items;
+            } catch (IOException e) {
+                if (!"HTTP 404".equals(e.getMessage()) || path == TAG_TAGS) throw e;
+            }
+        }
+        List<StreamInfoItem> items = listing(circuit, base + "/categories/" + tag + "/").items;
+        tagPath = TAG_CATEGORIES;
+        return items;
+    }
+
+    public Page listing(String circuit, String url) throws IOException {
+        String html = Web.get(circuit, url, "tube listing " + host(), null, timeoutMs);
+        Page p = new Page();
+        parse(html, p);
         return p;
     }
 
@@ -245,17 +343,109 @@ public final class HtmlTube {
             item.setViewCount(v);
             List<Image> thumbs = new ArrayList<>();
             Matcher th = thumb.matcher(b);
-            if (th.find()) thumbs.add(new Image(absolute(th.group(1)), 180, 320, Image.ResolutionLevel.MEDIUM));
+            if (th.find()) thumbs.add(new Image(absolute(Web.unescape(th.group(1))), 180, 320, Image.ResolutionLevel.MEDIUM));
             item.setThumbnails(thumbs);
             p.items.add(item);
         }
         return cards;
     }
 
+    private static final Pattern KEYWORDS = Pattern.compile(
+            "<meta\\s+name=[\"']keywords[\"']\\s+content=[\"']([^\"']*)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TAG_LINK = Pattern.compile(
+            "href=[\"'](?:https?://[^/\"']+)?/(?:tags|categories)/([^/\"'?#]+)/?[\"']");
+    private static final Set<String> TAG_NOISE = new HashSet<>(java.util.Arrays.asList(
+            "porn", "porno", "pornos", "sex", "xxx", "video", "videos", "hd", "1080p", "720p", "4k", "free", "tube",
+            "movie", "movies", "clip", "clips", "full", "online", "watch", "hot", "new", "best", "default", "site", "keywords"));
+    private static final int TAG_GAP = 1500;
+    private static final int TAG_TAIL = 8 * 1024;
+    private static final int TAG_LIMIT = 256 * 1024;
+    private static final int MAX_TAGS = 20;
+    private static final int TAG_CACHE = 64;
+    private static final java.util.Map<String, List<String>> TAGS = new java.util.LinkedHashMap<String, List<String>>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(java.util.Map.Entry<String, List<String>> e) {
+            return size() > TAG_CACHE;
+        }
+    };
+
+    public List<String> tags(String circuit, String url) throws IOException {
+        synchronized (TAGS) {
+            List<String> known = TAGS.get(url);
+            if (known != null) return known;
+        }
+        String html = Web.getUntil(circuit, pageFor(url), "tube tags " + URI.create(site).getHost(), null,
+                TAG_LINK, TAG_TAIL, timeoutMs, true, TAG_LIMIT);
+        List<String> out = pageTags(html);
+        synchronized (TAGS) {
+            TAGS.put(url, out);
+        }
+        return out;
+    }
+
+    static List<String> pageTags(String html) {
+        int from = 0;
+        Matcher h = H1.matcher(html);
+        if (h.find()) from = h.start();
+        String heading = h.find(0) ? Web.unescape(h.group(1)).toLowerCase(java.util.Locale.ROOT) : "";
+        List<List<String>> blocks = new ArrayList<>();
+        List<String> block = null;
+        Matcher l = TAG_LINK.matcher(html);
+        l.region(from, html.length());
+        int last = -1;
+        while (l.find()) {
+            if (l.group(1).indexOf('.') >= 0) continue;
+            if (block == null || l.start() - last > TAG_GAP) {
+                block = new ArrayList<>();
+                blocks.add(block);
+            }
+            last = l.start();
+            String slug;
+            try {
+                slug = java.net.URLDecoder.decode(l.group(1).replace("+", "%2B"), "UTF-8");
+            } catch (Exception e) {
+                slug = l.group(1);
+            }
+            addTag(block, slug.replaceAll("[-_+]+", " "));
+        }
+        List<String> meta = new ArrayList<>();
+        Matcher k = KEYWORDS.matcher(html);
+        if (k.find()) {
+            for (String t : Web.unescape(k.group(1)).split(",")) addTag(meta, t);
+        }
+        List<String> linked = new ArrayList<>();
+        for (List<String> b : blocks) {
+            boolean fits = false;
+            for (String t : b) fits |= meta.contains(t) || !heading.isEmpty() && heading.contains(t);
+            if (fits) for (String t : b) if (!linked.contains(t)) linked.add(t);
+        }
+        if (linked.isEmpty() && meta.isEmpty() && !blocks.isEmpty()) linked.addAll(blocks.get(0));
+        List<String> out = new ArrayList<>(meta);
+        for (String t : linked) if (!out.contains(t)) out.add(t);
+        return out.size() > MAX_TAGS ? new ArrayList<>(out.subList(0, MAX_TAGS)) : out;
+    }
+
+    private static void addTag(List<String> out, String raw) {
+        StringBuilder b = new StringBuilder();
+        for (String w : raw.trim().toLowerCase(java.util.Locale.ROOT).split("\\s+")) {
+            if (w.isEmpty() || TAG_NOISE.contains(w)) continue;
+            if (b.length() > 0) b.append(' ');
+            b.append(w);
+        }
+        String t = b.toString();
+        if (t.length() >= 2 && !out.contains(t)) out.add(t);
+    }
+
     public Media resolve(String circuit, String url) throws IOException {
         if (!handles(url)) throw new IOException("not a video link");
         String html = Web.getUntil(circuit, pageFor(url), "tube video " + URI.create(site).getHost(), null,
                 iframe != null ? iframe : STREAM_MARKER, iframe != null ? 2048 : 24 * 1024, timeoutMs);
+        List<String> seen = TAG_LINK.matcher(html).find() ? pageTags(html) : java.util.Collections.<String>emptyList();
+        if (!seen.isEmpty()) {
+            synchronized (TAGS) {
+                TAGS.putIfAbsent(url, seen);
+            }
+        }
         Media m = new Media();
         m.referer = referer != null ? referer : url;
         Matcher t = OG_TITLE.matcher(html);
@@ -337,6 +527,11 @@ public final class HtmlTube {
             }
         }
         if (m.mp4 == null) m.mp4 = lowest;
+        if (m.mp4 == null && segment != null) {
+            String[] found = com.orvid.play.Generic.stream(html, url);
+            if (found != null) m.mp4 = found[0];
+            else embedded(circuit, html, m);
+        }
         if (m.mp4 == null) throw new IOException("no stream");
         m.sprite = com.orvid.play.Storyboard.timeline(html, url);
         if (followRedirect) {
@@ -344,6 +539,29 @@ public final class HtmlTube {
             m.qualities.clear();
         }
         return m;
+    }
+
+    private static final Pattern FRAME = Pattern.compile("<iframe\\b[^>]*\\bsrc=[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PLAYER_FRAME = Pattern.compile("embed|player|/e/|/v/|video", Pattern.CASE_INSENSITIVE);
+
+    private void embedded(String circuit, String html, Media m) {
+        Matcher f = FRAME.matcher(html);
+        String any = null;
+        String player = null;
+        while (f.find() && player == null) {
+            String src = absolute(Web.unescape(f.group(1)));
+            if (!src.startsWith("http")) continue;
+            if (PLAYER_FRAME.matcher(src).find()) player = src;
+            else if (any == null) any = src;
+        }
+        String frame = player != null ? player : any;
+        if (frame == null) return;
+        try {
+            com.orvid.play.Direct d = com.orvid.play.Generic.resolve(circuit, frame);
+            m.mp4 = d.url;
+            m.referer = d.referer;
+        } catch (IOException ignored) {
+        }
     }
 
     private static final int MEDIA_HOP_TIMEOUT_MS = 12000;

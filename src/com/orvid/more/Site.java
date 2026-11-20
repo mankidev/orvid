@@ -30,6 +30,17 @@ public abstract class Site {
     public final String name;
     private final Pattern url;
 
+    private static final java.util.regex.Pattern ADULT = java.util.regex.Pattern.compile(
+            "\\b(?:xxx|porn\\w*|nsfw|nude|nudes|naked|nudity|onlyfans|fuck\\w*|hentai|sex|sexy|handjob|blowjob|cumshot|creampie|anal|"
+                    + "strap ?on|dildo|orgasm\\w*|bdsm|femdom|fetish|milf|boobs|pussy|erotic\\w*|dominatrix|"
+                    + "lingerie|see ?through|no ?panties|no ?bra|braless|topless|upskirt|try ?on haul|18 ?plus)\\b|18 ?\\+|"
+                    + "ノーパン|ノーブラ|透け|下着|エロ|порн\\w*|секс\\w*|эроти\\w*",
+            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+
+    protected static boolean adult(String title) {
+        return title != null && ADULT.matcher(title.replace('_', ' ').replace('-', ' ')).find();
+    }
+
     protected Site(int serviceId, String name, String urlPattern) {
         this.serviceId = serviceId;
         this.name = name;

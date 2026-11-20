@@ -153,6 +153,7 @@
     <string name="queued">W kolejce: %1$d</string>
     <string name="autoplay">Autoodtwarzanie</string>
     <string name="loop">Zapętl</string>
+    <string name="swipe_mode">Tryb przesuwania</string>
     <string name="up_next">Następne za %1$d: %2$s
 Dotknij, aby anulować</string>
     <string name="block_screenshots">Blokuj zrzuty i nagrywanie ekranu</string>
@@ -180,6 +181,14 @@ Dotknij, aby anulować</string>
     <string name="share">Udostępnij</string>
     <string name="hide_known">Już to widziałem</string>
     <string name="hide_known_done">Ukryto. Nie pojawi się więcej w wynikach.</string>
-    <string name="hidden_videos">Ukryte filmy</string>
-    <string name="hidden_clear">Pokaż ponownie ukryte filmy (%d)</string>
+    <string name="your_data">Twoje dane</string>
+    <string name="data_clear">Usuń dane</string>
+    <string name="data_clear_message">Filmy oznaczone jako „Już to widziałem” znów będą widoczne.</string>
+    <string name="data_clear_confirm">Usuń</string>
+    <plurals name="result_count">
+        <item quantity="one">%d wynik</item>
+        <item quantity="few">%d wyniki</item>
+        <item quantity="many">%d wyników</item>
+        <item quantity="other">%d wyniku</item>
+    </plurals>
 </resources>

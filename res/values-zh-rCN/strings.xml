@@ -153,6 +153,7 @@
     <string name="queued">队列中：%1$d</string>
     <string name="autoplay">自动播放</string>
     <string name="loop">循环</string>
+    <string name="swipe_mode">滑动模式</string>
     <string name="up_next">%1$d 秒后播放：%2$s
 点按取消</string>
     <string name="block_screenshots">禁止截屏和录屏</string>
@@ -180,6 +181,11 @@
     <string name="share">分享</string>
     <string name="hide_known">看过了</string>
     <string name="hide_known_done">已隐藏。不会再出现在结果中。</string>
-    <string name="hidden_videos">已隐藏的视频</string>
-    <string name="hidden_clear">重新显示已隐藏的视频 (%d)</string>
+    <string name="your_data">你的数据</string>
+    <string name="data_clear">删除数据</string>
+    <string name="data_clear_message">标记为“看过了”的视频将重新显示。</string>
+    <string name="data_clear_confirm">删除</string>
+    <plurals name="result_count">
+        <item quantity="other">%d 个结果</item>
+    </plurals>
 </resources>

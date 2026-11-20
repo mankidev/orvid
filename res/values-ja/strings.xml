@@ -153,6 +153,7 @@
     <string name="queued">キュー: %1$d 件</string>
     <string name="autoplay">自動再生</string>
     <string name="loop">ループ</string>
+    <string name="swipe_mode">スワイプモード</string>
     <string name="up_next">%1$d 秒後に次へ: %2$s
 タップでキャンセル</string>
     <string name="block_screenshots">スクリーンショットと画面録画をブロック</string>
@@ -180,6 +181,11 @@
     <string name="share">共有</string>
     <string name="hide_known">視聴済み</string>
     <string name="hide_known_done">非表示にしました。今後の結果には表示されません。</string>
-    <string name="hidden_videos">非表示の動画</string>
-    <string name="hidden_clear">非表示の動画を再表示 (%d)</string>
+    <string name="your_data">あなたのデータ</string>
+    <string name="data_clear">データを削除</string>
+    <string name="data_clear_message">「視聴済み」にした動画が再び表示されます。</string>
+    <string name="data_clear_confirm">削除</string>
+    <plurals name="result_count">
+        <item quantity="other">%d 件</item>
+    </plurals>
 </resources>

@@ -166,7 +166,13 @@ public final class CircuitDataSource extends BaseDataSource {
         parts = null;
         memory = null;
         if (SubTranslate.handles(dataSpec.uri.toString())) {
-            byte[] vtt = SubTranslate.vtt(circuit, dataSpec.uri.toString(), userAgent, referer, cookie);
+            byte[] vtt;
+            try {
+                vtt = SubTranslate.vtt(circuit, dataSpec.uri.toString(), userAgent, referer, cookie);
+            } catch (IOException | RuntimeException e) {
+                com.orvid.net.Diag.mark("subtitle translate FAIL " + e);
+                throw e;
+            }
             memory = vtt;
             memoryEnd = vtt.length;
             end = vtt.length;

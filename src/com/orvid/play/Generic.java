@@ -64,7 +64,7 @@ public final class Generic {
         throw new IOException("no stream in embed");
     }
 
-    static String[] stream(String html, String page) {
+    public static String[] stream(String html, String page) {
         List<String> found = new ArrayList<>();
         Matcher kvs = KVS.matcher(html);
         Matcher lic = LICENSE.matcher(html);

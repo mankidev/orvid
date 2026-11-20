@@ -17,6 +17,12 @@ public final class Web {
 
     static String getUntil(String circuit, String url, String label, Map<String, String> headers,
                            java.util.regex.Pattern marker, int tail, int timeoutMs) throws IOException {
+        return getUntil(circuit, url, label, headers, marker, tail, timeoutMs, false, Integer.MAX_VALUE);
+    }
+
+    static String getUntil(String circuit, String url, String label, Map<String, String> headers,
+                           java.util.regex.Pattern marker, int tail, int timeoutMs, boolean keepPartial,
+                           int limit) throws IOException {
         long began = System.currentTimeMillis();
         try {
             String text = Fetch.on(circuit, () -> {
@@ -42,8 +48,10 @@ public final class Web {
                             }
                             checked = buf.size();
                         }
-                        if (stopAt >= 0 && buf.size() >= stopAt) break;
+                        if (stopAt >= 0 && buf.size() >= stopAt || buf.size() >= limit) break;
                     }
+                } catch (IOException e) {
+                    if (!keepPartial || buf.size() == 0) throw e;
                 }
                 c.disconnect();
                 return new String(buf.toByteArray(), StandardCharsets.UTF_8);

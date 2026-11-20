@@ -25,7 +25,8 @@ public final class NotInterested {
     }
 
     public static boolean hides(StreamInfoItem item) {
-        if (Known.hides(item)) return true;
+        if (Dead.has(item)) return true;
+        if (Known.MARKED.hides(item)) return true;
         if (URLS.isEmpty()) return false;
         if (item.getUrl() != null && URLS.contains(item.getUrl())) return true;
         String channel = channel(item);

@@ -43,11 +43,15 @@ public final class Filters {
 
     private static final java.util.regex.Pattern LGBT_WORDS = java.util.regex.Pattern.compile(
             "\\b(gay|gays|twink|twinks|homo|homosexual|male on male|man on man|men on men|guy on guy|dude on dude|boy on boy|"
-                    + "bareback gay|gaysex|gay sex|str8 guy|bi guys|bisexual men|frat boys?|muscle hunk|hunks|"
+                    + "bareback gay|gaysex|gay sex|str8 guy|bi guys|bisexual men|bisexuals?|bi sexual|bicurious|bi curious|forced bi|imposed bi|bi threesome|bi cuck(old)?|frat boys?|muscle hunk|hunks|"
                     + "trans|transgender|transsexual|tranny|trannies|shemale|shemales|she male|ladyboy|ladyboys|tgirl|tgirls|t girl|"
                     + "ts|ts girl|travesti|travestis|futanari|futa|newhalf|femboy|femboys|sissy|crossdresser|crossdressers|"
                     + "lesbian|lesbians|lesbo|lesbos|lesbi|lezbiyen|girl on girl|girls on girls|woman on woman|women on women|"
                     + "queer|lgbt|lgbtq)\\b");
+
+    public static boolean lgbtWord(String text) {
+        return LGBT_WORDS.matcher(Query.fold(text).replace('-', ' ')).find();
+    }
 
     private static boolean lgbtSource(Source s) {
         return s.orientation != null && !s.orientation.isEmpty() && !"straight".equals(s.orientation);

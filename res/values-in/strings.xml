@@ -153,6 +153,7 @@
     <string name="queued">Dalam antrean: %1$d</string>
     <string name="autoplay">Putar otomatis</string>
     <string name="loop">Ulangi</string>
+    <string name="swipe_mode">Mode geser</string>
     <string name="up_next">Berikutnya dalam %1$d: %2$s
 Ketuk untuk membatalkan</string>
     <string name="block_screenshots">Blokir tangkapan dan rekaman layar</string>
@@ -180,6 +181,11 @@ Ketuk untuk membatalkan</string>
     <string name="share">Bagikan</string>
     <string name="hide_known">Sudah pernah lihat</string>
     <string name="hide_known_done">Disembunyikan. Tidak akan muncul lagi di hasil.</string>
-    <string name="hidden_videos">Video tersembunyi</string>
-    <string name="hidden_clear">Tampilkan lagi video tersembunyi (%d)</string>
+    <string name="your_data">Data kamu</string>
+    <string name="data_clear">Hapus data</string>
+    <string name="data_clear_message">Video yang kamu tandai “Sudah pernah lihat” akan muncul lagi.</string>
+    <string name="data_clear_confirm">Hapus</string>
+    <plurals name="result_count">
+        <item quantity="other">%d hasil</item>
+    </plurals>
 </resources>

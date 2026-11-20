@@ -153,6 +153,7 @@
     <string name="queued">In coda: %1$d</string>
     <string name="autoplay">Riproduzione automatica</string>
     <string name="loop">Ripeti</string>
+    <string name="swipe_mode">Modalità scorrimento</string>
     <string name="up_next">Prossimo tra %1$d: %2$s
 Tocca per annullare</string>
     <string name="block_screenshots">Blocca screenshot e registrazione dello schermo</string>
@@ -180,6 +181,12 @@ Tocca per annullare</string>
     <string name="share">Condividi</string>
     <string name="hide_known">Già visto</string>
     <string name="hide_known_done">Nascosto. Non comparirà più nei risultati.</string>
-    <string name="hidden_videos">Video nascosti</string>
-    <string name="hidden_clear">Mostra di nuovo i video nascosti (%d)</string>
+    <string name="your_data">I tuoi dati</string>
+    <string name="data_clear">Elimina dati</string>
+    <string name="data_clear_message">I video segnati come «Già visto» verranno mostrati di nuovo.</string>
+    <string name="data_clear_confirm">Elimina</string>
+    <plurals name="result_count">
+        <item quantity="one">%d risultato</item>
+        <item quantity="other">%d risultati</item>
+    </plurals>
 </resources>

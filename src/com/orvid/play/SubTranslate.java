@@ -101,7 +101,10 @@ public final class SubTranslate {
                 HttpURLConnection c = Fetch.open(url);
                 c.setRequestProperty("User-Agent", userAgent != null ? userAgent : Fetch.USER_AGENT);
                 c.setRequestProperty("Accept-Encoding", "identity");
-                if (referer != null) c.setRequestProperty("Referer", referer);
+                if (referer != null) {
+                    c.setRequestProperty("Referer", referer);
+                    c.setRequestProperty("Origin", referer.replaceAll("/$", ""));
+                }
                 if (cookie != null) c.setRequestProperty("Cookie", cookie);
                 if (c.getResponseCode() >= 400) throw new IOException("subtitle HTTP " + c.getResponseCode());
                 return new String(read(c.getInputStream()), StandardCharsets.UTF_8).replace("﻿", "");

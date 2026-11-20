@@ -278,6 +278,22 @@ public final class Images {
         prefetch(url, targetWidth, page, false);
     }
 
+    private static final long HOST_WARM_MS = 60000;
+    private final java.util.Map<String, Long> warmHosts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public void warmHost(String url, int targetWidth, String page) {
+        if (url == null || !url.startsWith("http")) return;
+        String host = android.net.Uri.parse(url).getHost();
+        if (host == null || host.endsWith("ytimg.com")) return;
+        long now = System.currentTimeMillis();
+        Long last = warmHosts.get(host);
+        if (last != null && now - last < HOST_WARM_MS) return;
+        warmHosts.put(host, now);
+        String wanted = smaller(url, targetWidth);
+        if (raw.get(wanted) != null) return;
+        warmer.execute(() -> ThumbPrint.record(page, obtain(wanted, page, targetWidth)));
+    }
+
     public void prefetch(String url, int targetWidth, String page, boolean full) {
         if (url == null || url.isEmpty() || memory.get(url + "@" + targetWidth) != null) return;
         String sized = smaller(url, targetWidth);
@@ -397,19 +413,34 @@ public final class Images {
     }
 
     private static byte[] download(String url, String referer) throws IOException {
+        return download(url, referer, 2);
+    }
+
+    private static byte[] download(String url, String referer, int hops) throws IOException {
         java.net.HttpURLConnection c = Fetch.open(url);
-        c.setConnectTimeout(12000);
-        c.setReadTimeout(15000);
+        boolean tor = Fetch.torMode();
+        c.setConnectTimeout(tor ? 12000 : DIRECT_CONNECT_MS);
+        c.setReadTimeout(tor ? 15000 : DIRECT_READ_MS);
         c.setRequestProperty("User-Agent", Fetch.USER_AGENT);
         c.setRequestProperty("Accept", "image/webp,image/jpeg,image/png,image/*;q=0.8");
         if (referer != null) c.setRequestProperty("Referer", referer);
         int code = c.getResponseCode();
-        if (code == 404 || code == 410) throw new Gone(code);
+        String moved = code >= 300 && code < 400 ? c.getHeaderField("Location") : null;
+        if (moved != null && hops > 0) {
+            c.disconnect();
+            String next = java.net.URI.create(url).resolve(moved).toString();
+            if (next.startsWith("http://")) next = "https://" + next.substring(7);
+            return download(next, referer, hops - 1);
+        }
+        if (code == 404 || code == 410 || code >= 400 && code < 500 && !tor) throw new Gone(code);
         if (code >= 400) throw new IOException("HTTP " + code);
         try (java.io.InputStream in = c.getInputStream()) {
             return Streams.readAll(in);
         }
     }
+
+    private static final int DIRECT_CONNECT_MS = 6000;
+    private static final int DIRECT_READ_MS = 8000;
 
     private static final class Gone extends IOException {
         Gone(int code) {

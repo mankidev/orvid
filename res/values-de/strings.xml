@@ -153,6 +153,7 @@
     <string name="queued">In der Warteschlange: %1$d</string>
     <string name="autoplay">Autoplay</string>
     <string name="loop">Wiederholen</string>
+    <string name="swipe_mode">Wischmodus</string>
     <string name="up_next">Als Nächstes in %1$d: %2$s
 Zum Abbrechen tippen</string>
     <string name="block_screenshots">Screenshots und Bildschirmaufnahmen sperren</string>
@@ -180,6 +181,12 @@ Zum Abbrechen tippen</string>
     <string name="share">Teilen</string>
     <string name="hide_known">Kenne ich schon</string>
     <string name="hide_known_done">Ausgeblendet. Es erscheint nicht mehr in den Ergebnissen.</string>
-    <string name="hidden_videos">Ausgeblendete Videos</string>
-    <string name="hidden_clear">Ausgeblendete Videos wieder zeigen (%d)</string>
+    <string name="your_data">Deine Daten</string>
+    <string name="data_clear">Daten löschen</string>
+    <string name="data_clear_message">Videos, die du mit „Kenne ich schon“ markiert hast, werden wieder angezeigt.</string>
+    <string name="data_clear_confirm">Löschen</string>
+    <plurals name="result_count">
+        <item quantity="one">%d Ergebnis</item>
+        <item quantity="other">%d Ergebnisse</item>
+    </plurals>
 </resources>

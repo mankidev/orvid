@@ -53,6 +53,24 @@ final class PlayerControls implements Player.Listener {
     private long previewFor = -1;
     private float downX;
     private float downY;
+    private float downRawY;
+    private int feedDir;
+    private float lastRawY;
+    private long lastMoveAt;
+    private float feedSpeed;
+
+    private void trackSpeed(MotionEvent e) {
+        long dt = Math.max(1, e.getEventTime() - lastMoveAt);
+        float v = (e.getRawY() - lastRawY) * 1000f / dt;
+        feedSpeed = dt > 100 ? v : 0.6f * v + 0.4f * feedSpeed;
+        lastRawY = e.getRawY();
+        lastMoveAt = e.getEventTime();
+    }
+
+    private float feedPull(MotionEvent e) {
+        float pull = e.getRawY() - downRawY;
+        return feedDir < 0 ? Math.min(pull, 0f) : Math.max(pull, 0f);
+    }
     private boolean scrubbing;
     private long scrubFrom;
     private long scrubTarget;
@@ -230,6 +248,10 @@ final class PlayerControls implements Player.Listener {
                 case MotionEvent.ACTION_DOWN:
                     downX = e.getX();
                     downY = e.getY();
+                    downRawY = e.getRawY();
+                    lastRawY = downRawY;
+                    lastMoveAt = e.getEventTime();
+                    feedSpeed = 0f;
                     touching = true;
                     scrubbing = false;
                     swiping = false;
@@ -239,9 +261,21 @@ final class PlayerControls implements Player.Listener {
                     float dx = e.getX() - downX;
                     float dy = e.getY() - downY;
                     if (!swiping && !scrubbing && e.getPointerCount() == 1 && Math.abs(dy) > slop * 2
-                            && Math.abs(dy) > Math.abs(dx) * 1.5f && (isLandscape() ? dy > 0 : dy < 0)) {
-                        swiping = true;
-                        if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
+                            && Math.abs(dy) > Math.abs(dx) * 1.5f) {
+                        feedSwipe = feedMode();
+                        feedDir = dy < 0 ? -1 : 1;
+                        if (feedSwipe || (isLandscape() ? dy > 0 : dy < 0)) {
+                            swiping = true;
+                            if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
+                        }
+                    }
+                    if (swiping && feedSwipe) {
+                        if (((PlayerActivity) activity).feedLeaving()) return true;
+                        trackSpeed(e);
+                        float pull = feedPull(e);
+                        ((PlayerActivity) activity).feedDrag(feedDir);
+                        stageView.setTranslationY(pull);
+                        return true;
                     }
                     if (swiping) {
                         float pull = Math.max(0f, isLandscape() ? dy : -dy);
@@ -277,6 +311,25 @@ final class PlayerControls implements Player.Listener {
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     touching = false;
+                    if (swiping && feedSwipe) {
+                        swiping = false;
+                        feedSwipe = false;
+                        if (((PlayerActivity) activity).feedLeaving()) return true;
+                        trackSpeed(e);
+                        float pull = Math.abs(feedPull(e));
+                        float density = activity.getResources().getDisplayMetrics().density;
+                        float need = Math.max(SWIPE_DP * density, stageView.getHeight() * FEED_COMMIT);
+                        float along = feedSpeed * feedDir / density;
+                        boolean commit = e.getActionMasked() == MotionEvent.ACTION_UP && along > -FEED_BACK_DPS
+                                && (pull > need || along > FEED_FLING_DPS && pull > slop * 2);
+                        PlayerActivity host = (PlayerActivity) activity;
+                        if (!commit || !host.swipe(feedDir < 0)) {
+                            stageView.animate().translationY(0f).alpha(1f).setDuration(200)
+                                    .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                                    .withEndAction(host::feedRest).start();
+                        }
+                        return true;
+                    }
                     if (swiping) {
                         swiping = false;
                         float dy = e.getY() - downY;
@@ -316,7 +369,7 @@ final class PlayerControls implements Player.Listener {
         player.addListener(this);
         overlay.post(tick);
         refreshFullscreenIcon();
-        play.setVisibility(View.INVISIBLE);
+        play.setVisibility(player.getPlaybackState() == Player.STATE_READY ? View.VISIBLE : View.INVISIBLE);
     }
 
     private long position(int progress) {
@@ -348,7 +401,15 @@ final class PlayerControls implements Player.Listener {
     private static final long SKIP_GUARD_MS = 600;
     private static final int SWIPE_DP = 48;
     private static final float SWIPE_SCALE = 0.12f;
+    private static final float FEED_COMMIT = 0.1f;
+    private static final float FEED_BACK_DPS = 150f;
+    private static final float FEED_FLING_DPS = 800f;
     private boolean swiping;
+    private boolean feedSwipe;
+
+    private boolean feedMode() {
+        return activity instanceof PlayerActivity && com.orvid.app.OrvidApp.get().swipeMode();
+    }
     private long shownAt;
     private View previous;
     private View next;
@@ -377,8 +438,22 @@ final class PlayerControls implements Player.Listener {
         overlay.setVisibility(View.VISIBLE);
         overlay.animate().alpha(1f).setDuration(160).start();
         mini.animate().alpha(0f).setDuration(160).start();
+        liftSubtitle(true);
         updateProgress();
         scheduleHide();
+    }
+
+    private void liftSubtitle(boolean up) {
+        View shown = stageView.findViewById(R.id.subtitle);
+        if (shown == null) return;
+        float y = 0f;
+        if (up && time.getParent() instanceof View) {
+            int margin = shown.getLayoutParams() instanceof ViewGroup.MarginLayoutParams
+                    ? ((ViewGroup.MarginLayoutParams) shown.getLayoutParams()).bottomMargin : 0;
+            y = -Math.max(0, overlay.getHeight() - ((View) time.getParent()).getTop() - margin);
+        }
+        shown.animate().cancel();
+        shown.animate().translationY(y).setDuration(up ? 160 : 220).start();
     }
 
     void hide() {
@@ -388,6 +463,7 @@ final class PlayerControls implements Player.Listener {
         overlay.animate().alpha(0f).setDuration(220)
                 .withEndAction(() -> overlay.setVisibility(View.GONE)).start();
         mini.animate().alpha(isLandscape() ? 0f : 1f).setDuration(220).start();
+        liftSubtitle(false);
     }
 
     private void scheduleHide() {
@@ -447,6 +523,14 @@ final class PlayerControls implements Player.Listener {
             if (c.language != null && (c.language.equals(mine) || c.language.startsWith(mine + "-"))) {
                 pick = c;
                 break;
+            }
+        }
+        if (pick == null) {
+            for (Choice c : text) {
+                if (c.language != null && (c.language.equals("en") || c.language.startsWith("en-"))) {
+                    pick = c;
+                    break;
+                }
             }
         }
         if (pick == null) pick = text.get(0);
@@ -592,6 +676,15 @@ final class PlayerControls implements Player.Listener {
             player.setRepeatMode(loopOn ? Player.REPEAT_MODE_OFF : Player.REPEAT_MODE_ONE);
             sheet.dismiss();
         });
+        if (activity instanceof PlayerActivity) {
+            boolean swipeOn = com.orvid.app.OrvidApp.get().swipeMode();
+            sheet.row(R.drawable.ic_swipe, activity.getString(R.string.swipe_mode),
+                    activity.getString(swipeOn ? R.string.on : R.string.off), () -> {
+                com.orvid.app.OrvidApp.get().setSwipeMode(!swipeOn);
+                sheet.dismiss();
+                ((PlayerActivity) activity).refreshLayout();
+            });
+        }
         if (activity instanceof PlayerActivity) {
             sheet.row(R.drawable.ic_share, activity.getString(R.string.share), "", () -> {
                 sheet.dismiss();

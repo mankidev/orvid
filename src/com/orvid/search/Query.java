@@ -38,6 +38,7 @@ public final class Query {
     public int afterYear;
     public String channel;
     public String site = SITE_ALL;
+    public volatile java.util.Map<String, String> alias = java.util.Collections.emptyMap();
 
     private Query(String raw, String platformQuery) {
         this.raw = raw;
@@ -57,8 +58,23 @@ public final class Query {
     public static final String KANA = "kana";
     public static final String HAN = "han";
 
+    private volatile String script;
+    private volatile List<String> exact;
+
     public String script() {
-        return script(platformQuery);
+        String s = script;
+        if (s == null) script = s = script(platformQuery);
+        return s;
+    }
+
+    List<String> exactWords() {
+        List<String> e = exact;
+        if (e == null) {
+            List<String> want = new ArrayList<>();
+            if (plainQuery != null) for (String w : words(fold(plainQuery))) if (!isStop(w)) want.add(w);
+            exact = e = java.util.Collections.unmodifiableList(want);
+        }
+        return e;
     }
 
     public static double foreignShare(String text, String script) {

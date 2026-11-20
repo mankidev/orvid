@@ -153,6 +153,7 @@
     <string name="queued">कतार में: %1$d</string>
     <string name="autoplay">ऑटोप्ले</string>
     <string name="loop">लूप</string>
+    <string name="swipe_mode">स्वाइप मोड</string>
     <string name="up_next">%1$d में अगला: %2$s
 रद्द करने के लिए टैप करें</string>
     <string name="block_screenshots">स्क्रीनशॉट और स्क्रीन रिकॉर्डिंग रोकें</string>
@@ -180,6 +181,12 @@
     <string name="share">शेयर करें</string>
     <string name="hide_known">यह देख चुका हूँ</string>
     <string name="hide_known_done">छिपा दिया गया। यह परिणामों में फिर नहीं दिखेगा।</string>
-    <string name="hidden_videos">छिपे हुए वीडियो</string>
-    <string name="hidden_clear">छिपे वीडियो फिर दिखाएँ (%d)</string>
+    <string name="your_data">आपका डेटा</string>
+    <string name="data_clear">डेटा मिटाएँ</string>
+    <string name="data_clear_message">जिन वीडियो को तुमने “यह देख चुका हूँ” चिह्नित किया था, वे फिर से दिखेंगे।</string>
+    <string name="data_clear_confirm">मिटाएँ</string>
+    <plurals name="result_count">
+        <item quantity="one">%d परिणाम</item>
+        <item quantity="other">%d परिणाम</item>
+    </plurals>
 </resources>

@@ -56,11 +56,10 @@ final class VideoAdapter extends BaseAdapter {
     private final OnPick onPick;
     private final List<StreamInfoItem> items = new ArrayList<>();
 
-    private void turnOffSource(StreamInfoItem item) {
+    static String turnOff(Context context, int sid) {
         android.content.SharedPreferences prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE);
         if (com.orvid.search.Filters.current == null) com.orvid.search.Filters.current = com.orvid.search.Filters.load(prefs);
         com.orvid.search.Filters f = com.orvid.search.Filters.current;
-        int sid = item.getServiceId();
         String name;
         if (sid == org.schabi.newpipe.extractor.ServiceList.YouTube.getServiceId()) {
             f.youtube = false;
@@ -73,7 +72,7 @@ final class VideoAdapter extends BaseAdapter {
             name = "VK Video";
         } else {
             com.orvid.search.Source s = Sources.byService(sid);
-            if (s == null) return;
+            if (s == null) return null;
             f.set(s, false);
             name = s.name;
         }
@@ -81,8 +80,15 @@ final class VideoAdapter extends BaseAdapter {
         for (com.orvid.search.Source s : Sources.current()) any |= f.on(s);
         if (!any) f.youtube = true;
         f.save(prefs);
-        if (items.removeIf(i -> i.getServiceId() == sid)) notifyDataSetChanged();
         android.widget.Toast.makeText(context, context.getString(R.string.source_off_done, name), android.widget.Toast.LENGTH_SHORT).show();
+        return name;
+    }
+
+    private void turnOffSource(StreamInfoItem item) {
+        int sid = item.getServiceId();
+        if (turnOff(context, sid) == null) return;
+        if (items.removeIf(i -> i.getServiceId() == sid)) notifyDataSetChanged();
+        if (context instanceof MainActivity) ((MainActivity) context).sourceTurnedOff(sid);
     }
 
     private void showMenu(StreamInfoItem item, View anchor) {
@@ -109,7 +115,7 @@ final class VideoAdapter extends BaseAdapter {
                 return true;
             }
             if (m.getItemId() == 6) {
-                com.orvid.search.Known.add(item);
+                com.orvid.search.Known.MARKED.add(item);
                 prune();
                 android.widget.Toast.makeText(context, R.string.hide_known_done, android.widget.Toast.LENGTH_SHORT).show();
                 return true;
@@ -173,7 +179,7 @@ final class VideoAdapter extends BaseAdapter {
         for (int i = 0; i < items.size(); i++) {
             StreamInfoItem item = items.get(i);
             if (!page.equals(item.getUrl())) continue;
-            if (com.orvid.search.Known.hides(item)) {
+            if (com.orvid.search.Known.MARKED.hides(item)) {
                 tail.remove(items.remove(i));
                 notifyDataSetChanged();
                 return;
@@ -266,6 +272,12 @@ final class VideoAdapter extends BaseAdapter {
         return out;
     }
 
+    void removeItem(StreamInfoItem item) {
+        if (!items.remove(item)) return;
+        tail.remove(item);
+        notifyDataSetChanged();
+    }
+
     boolean inTail(StreamInfoItem item) {
         return tail.contains(item);
     }
@@ -303,6 +315,17 @@ final class VideoAdapter extends BaseAdapter {
         if (Math.abs(from - prefetchFrom) < PREFETCH_STEP) return;
         prefetchFrom = from;
         prefetch();
+    }
+
+    void warmHosts(List<StreamInfoItem> list) {
+        if (mode == TEXT) return;
+        int cols = columns(mode);
+        int width = cols > 1 ? screenWidth / cols : mode == COMPACT ? Math.min(360, screenWidth / 2) : Math.min(640, screenWidth);
+        com.orvid.image.Images images = OrvidApp.get().images();
+        for (int i = 0; i < Math.min(2, list.size()); i++) {
+            StreamInfoItem item = list.get(i);
+            images.warmHost(Ui.thumbnail(item.getThumbnails(), width), width, item.getUrl());
+        }
     }
 
     void prefetch(List<StreamInfoItem> list, int count, boolean full) {

@@ -40,6 +40,7 @@ public final class OrvidApp extends Application {
         CrashLog.install(this);
         new Thread(() -> TempLogs.sweep(this), "orvid-sweep").start();
         prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        if (prefs.contains("collect_data")) prefs.edit().remove("collect_data").apply();
         lock = new AppLock(prefs);
         registerActivityLifecycleCallbacks(lock);
         registerActivityLifecycleCallbacks(new Background());
@@ -54,7 +55,13 @@ public final class OrvidApp extends Application {
         if (prefs.contains("dev_mode")) prefs.edit().remove("dev_mode").apply();
         if (prefs.contains("mode")) prefs.edit().remove("mode").apply();
         new File(getFilesDir(), "history.json").delete();
-        new Thread(() -> com.orvid.search.Known.load(getFilesDir()), "orvid-known").start();
+        for (String gone : new String[] {"seen.bin", "taste.bin", "meaning.bin", "seen.bin.tmp", "taste.bin.tmp", "meaning.bin.tmp"}) {
+            new File(getFilesDir(), gone).delete();
+        }
+        new Thread(() -> {
+            com.orvid.search.Known.loadAll(getFilesDir());
+            com.orvid.ui.FeedCache.prepare();
+        }, "orvid-known").start();
         File speech = new File(getFilesDir(), "speech");
         File[] models = speech.listFiles();
         if (models != null) for (File f : models) f.delete();
@@ -126,6 +133,14 @@ public final class OrvidApp extends Application {
 
     public boolean autoplay() {
         return prefs.getBoolean("autoplay", true);
+    }
+
+    public boolean swipeMode() {
+        return prefs.getBoolean("swipe_mode", false);
+    }
+
+    public void setSwipeMode(boolean on) {
+        prefs.edit().putBoolean("swipe_mode", on).apply();
     }
 
     public void setAutoplay(boolean on) {
@@ -289,6 +304,8 @@ public final class OrvidApp extends Application {
     public void wipeAndExit() {
         try {
             com.orvid.play.Session.release();
+            com.orvid.ui.FeedPreload.drop();
+            com.orvid.ui.FeedCache.clear();
         } catch (Exception ignored) {
         }
         try {
@@ -305,6 +322,7 @@ public final class OrvidApp extends Application {
         wipe(getCacheDir());
         wipe(getDir("webview", MODE_PRIVATE));
         wipe(getCodeCacheDir());
+        CrashLog.selfExit(this);
         android.os.Process.killProcess(android.os.Process.myPid());
         System.exit(0);
     }

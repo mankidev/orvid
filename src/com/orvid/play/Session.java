@@ -76,6 +76,13 @@ public final class Session {
         sources.clear();
     }
 
+    public static void detach() {
+        player = null;
+        url = null;
+        related.clear();
+        clearMedia();
+    }
+
     public static void release() {
         if (player != null) player.release();
         player = null;

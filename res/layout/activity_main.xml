@@ -119,6 +119,44 @@
         android:visibility="gone" />
 
     <LinearLayout
+        android:id="@+id/refine_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="4dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/result_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="@dimen/gutter"
+            android:paddingEnd="8dp"
+            android:singleLine="true"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <HorizontalScrollView
+            android:id="@+id/refine_row"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:paddingEnd="@dimen/gutter"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/refine_chips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/trace"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -173,87 +211,94 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <FrameLayout
+    <com.orvid.ui.SourcePager
+        android:id="@+id/pager"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <ListView
-            android:id="@+id/list"
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:divider="@null"
-            android:paddingBottom="12dp"
-            android:scrollbars="none" />
+            android:background="@color/bg">
 
-        <ProgressBar
-            android:id="@+id/progress"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_gravity="center"
-            android:indeterminateTint="@color/text_secondary"
-            android:visibility="gone" />
-
-        <LinearLayout
-            android:id="@+id/search_wait"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center_horizontal"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <ImageView
-                android:id="@+id/search_wait_logo"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginBottom="18dp"
-                android:importantForAccessibility="no" />
+            <ListView
+                android:id="@+id/list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:divider="@null"
+                android:paddingBottom="12dp"
+                android:scrollbars="none" />
 
             <ProgressBar
-                android:id="@+id/search_wait_bar"
-                style="@android:style/Widget.ProgressBar.Horizontal"
-                android:layout_width="220dp"
-                android:layout_height="4dp"
-                android:max="1000"
-                android:progressDrawable="@drawable/trace_track" />
-        </LinearLayout>
+                android:id="@+id/progress"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center"
+                android:indeterminateTint="@color/text_secondary"
+                android:visibility="gone" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            <LinearLayout
+                android:id="@+id/search_wait"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:visibility="gone">
 
-            <TextView
-                android:id="@+id/message"
+                <ImageView
+                    android:id="@+id/search_wait_logo"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginBottom="18dp"
+                    android:importantForAccessibility="no" />
+
+                <ProgressBar
+                    android:id="@+id/search_wait_bar"
+                    style="@android:style/Widget.ProgressBar.Horizontal"
+                    android:layout_width="220dp"
+                    android:layout_height="4dp"
+                    android:max="1000"
+                    android:progressDrawable="@drawable/trace_track" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="center"
-                android:paddingStart="40dp"
-                android:paddingEnd="40dp"
-                android:lineSpacingMultiplier="1.2"
-                android:textColor="@color/text_secondary"
-                android:textSize="14sp" />
+                android:layout_gravity="center"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/add_repo"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:layout_marginTop="16dp"
-                android:background="@drawable/bg_button"
-                android:gravity="center"
-                android:paddingStart="22dp"
-                android:paddingEnd="22dp"
-                android:text="@string/add_repo"
-                android:textColor="@color/on_accent"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
-        </LinearLayout>
-    </FrameLayout>
+                <TextView
+                    android:id="@+id/message"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:paddingStart="40dp"
+                    android:paddingEnd="40dp"
+                    android:lineSpacingMultiplier="1.2"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/add_repo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/bg_button"
+                    android:gravity="center"
+                    android:paddingStart="22dp"
+                    android:paddingEnd="22dp"
+                    android:text="@string/add_repo"
+                    android:textColor="@color/on_accent"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </FrameLayout>
+    </com.orvid.ui.SourcePager>
 
     <include layout="@layout/view_mini" />
 </LinearLayout>

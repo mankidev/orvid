@@ -108,11 +108,11 @@ final class RepoDialog {
         chips.setOrientation(LinearLayout.HORIZONTAL);
         String[][] suggested = {
                 {a.getString(R.string.repo_official), Repos.OFFICIAL},
-                {"Orvid secret (18+)", Repos.SECRET},
+                {"Orvid adult (18+)", Repos.ADULT},
         };
         for (String[] s : suggested) {
             if (Repos.installed(OrvidApp.get().extRoot(), s[1])) continue;
-            if (Repos.SECRET.equals(s[1]) && !com.orvid.search.Source.adultUnlocked) continue;
+            if (Repos.ADULT.equals(s[1]) && !com.orvid.search.Source.adultUnlocked) continue;
             TextView chip = new TextView(a);
             chip.setText(s[0]);
             chip.setTextColor(a.getColor(R.color.accent));

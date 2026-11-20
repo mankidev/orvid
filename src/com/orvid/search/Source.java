@@ -60,9 +60,13 @@ public abstract class Source {
         return this;
     }
 
+    private static final int TOPICAL = 3;
+
     public int priority(Query q) {
         if (script != null) return 2;
-        return adult ? 5 : 4;
+        if (!adult) return 4;
+        for (String t : q.terms) if (about(t)) return TOPICAL;
+        return 5;
     }
 
     static final java.util.Set<String> ADULT_KEYS = java.util.concurrent.ConcurrentHashMap.newKeySet();

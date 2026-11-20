@@ -155,6 +155,7 @@
     <string name="queued">Sırada: %1$d</string>
     <string name="autoplay">Otomatik oynat</string>
     <string name="loop">Döngü</string>
+    <string name="swipe_mode">Kaydırma modu</string>
     <string name="up_next">%1$d sn sonra: %2$s
 İptal için dokunun</string>
     <string name="block_screenshots">Ekran görüntüsünü ve kaydını engelle</string>
@@ -182,6 +183,11 @@
     <string name="share">Paylaş</string>
     <string name="hide_known">Bunu biliyorum</string>
     <string name="hide_known_done">Gizlendi. Sonuçlarda bir daha çıkmayacak.</string>
-    <string name="hidden_videos">Gizlenen videolar</string>
-    <string name="hidden_clear">Gizlenen videoları geri getir (%d)</string>
+    <string name="your_data">Verilerin</string>
+    <string name="data_clear">Verileri sil</string>
+    <string name="data_clear_message">“Bunu biliyorum” dediğin videolar yeniden görünecek.</string>
+    <string name="data_clear_confirm">Sil</string>
+    <plurals name="result_count">
+        <item quantity="other">%d sonuç</item>
+    </plurals>
 </resources>

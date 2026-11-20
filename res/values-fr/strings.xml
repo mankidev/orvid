@@ -153,6 +153,7 @@
     <string name="queued">Dans la file : %1$d</string>
     <string name="autoplay">Lecture auto</string>
     <string name="loop">Boucle</string>
+    <string name="swipe_mode">Mode balayage</string>
     <string name="up_next">Ensuite dans %1$d : %2$s
 Touchez pour annuler</string>
     <string name="block_screenshots">Bloquer les captures et l\'enregistrement d\'écran</string>
@@ -180,6 +181,12 @@ Touchez pour annuler</string>
     <string name="share">Partager</string>
     <string name="hide_known">Déjà vu</string>
     <string name="hide_known_done">Masquée. Elle n\'apparaîtra plus dans les résultats.</string>
-    <string name="hidden_videos">Vidéos masquées</string>
-    <string name="hidden_clear">Réafficher les vidéos masquées (%d)</string>
+    <string name="your_data">Tes données</string>
+    <string name="data_clear">Supprimer les données</string>
+    <string name="data_clear_message">Les vidéos marquées « Déjà vu » réapparaîtront.</string>
+    <string name="data_clear_confirm">Supprimer</string>
+    <plurals name="result_count">
+        <item quantity="one">%d résultat</item>
+        <item quantity="other">%d résultats</item>
+    </plurals>
 </resources>

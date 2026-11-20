@@ -46,7 +46,7 @@ public final class Repos {
     }
 
     public static final String OFFICIAL = "https://raw.githubusercontent.com/mankidev/orvid-sources/main/";
-    public static final String SECRET = "https://raw.githubusercontent.com/mankidev/orvid-sources-secret/main/";
+    public static final String ADULT = "https://raw.githubusercontent.com/mankidev/orvid-sources-adult/main/";
 
     public static boolean installed(File root, String url) {
         String wanted = canonical(normalize(url));
@@ -55,7 +55,8 @@ public final class Repos {
     }
 
     private static String canonical(String url) {
-        return url.replace("://raw.githubusercontent.com/DavutKaraoglan/", "://raw.githubusercontent.com/mankidev/");
+        return url.replace("://raw.githubusercontent.com/DavutKaraoglan/", "://raw.githubusercontent.com/mankidev/")
+                .replace("/mankidev/orvid-sources-secret/", "/mankidev/orvid-sources-adult/");
     }
 
     public static List<Link> suggested(File root) {
@@ -117,7 +118,7 @@ public final class Repos {
                 JsonObject m = JsonParser.object().from(Registry.read(new File(d, "meta.json")));
                 Repo r = new Repo();
                 r.id = d.getName();
-                r.url = m.getString("url");
+                r.url = canonical(m.getString("url"));
                 r.name = m.getString("name", r.url);
                 r.key = m.getString("key");
                 r.updated = m.getLong("updated", 0);

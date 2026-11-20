@@ -113,6 +113,10 @@ public final class MainActivity extends Activity implements Tor.Listener {
         addRepo = findViewById(R.id.add_repo);
         addRepo.setOnClickListener(v -> RepoDialog.add(this, this::repoChanged));
         correction = findViewById(R.id.correction);
+        refineRow = findViewById(R.id.refine_row);
+        refineChips = findViewById(R.id.refine_chips);
+        refineBar = findViewById(R.id.refine_bar);
+        resultCount = findViewById(R.id.result_count);
         trace = findViewById(R.id.trace);
         wait = findViewById(R.id.search_wait);
         waitLogo = findViewById(R.id.search_wait_logo);
@@ -136,25 +140,48 @@ public final class MainActivity extends Activity implements Tor.Listener {
         filters = Filters.current != null ? Filters.current : Filters.load(getSharedPreferences("settings", MODE_PRIVATE));
         Filters.current = filters;
         com.orvid.yt.Related.safeSearch = filters.hideAdult;
-        adapter = new VideoAdapter(this, OrvidApp.get().layoutMode(), item -> {
-            if (Ui.doubleTap()) return;
-            com.orvid.ext.ExtSource ext = com.orvid.ext.Registry.forUrl(item.getUrl());
-            if (ext != null ? ext.webPlayback : com.orvid.web.WebSites.forUrl(item.getUrl()) != null) {
-                startActivity(new Intent(this, WebPlayerActivity.class).putExtra(WebPlayerActivity.EXTRA_URL, item.getUrl()));
-                return;
+        adapter = new VideoAdapter(this, OrvidApp.get().layoutMode(), item -> openItem(item, adapter.previewPosition(item.getUrl())));
+        pager = findViewById(R.id.pager);
+        pager.attach(new SourcePager.Host() {
+            @Override
+            public List<StreamInfoItem> results() {
+                return adapter.items();
             }
-            PlayerActivity.clearBack();
-            long at = adapter.previewPosition(item.getUrl());
-            startActivity(new Intent(this, PlayerActivity.class)
-                        .putExtra(PlayerActivity.EXTRA_START_MS, Math.max(0, at))
-                        .putExtra(PlayerActivity.EXTRA_TITLE, item.getName())
-                        .putExtra(PlayerActivity.EXTRA_AVATAR, Ui.thumbnail(item.getUploaderAvatars(), Ui.dp(this, 32)))
-                        .putExtra(PlayerActivity.EXTRA_DATE, PlayerActivity.dateOf(item))
-                        .putExtra(PlayerActivity.EXTRA_URL, item.getUrl())
-                        .putExtra(PlayerActivity.EXTRA_SEED, query == null ? null : query.plainQuery)
-                        .putExtra(PlayerActivity.EXTRA_SERVICE, item.getServiceId())
-                        .putExtra(PlayerActivity.EXTRA_THUMB, Ui.thumbnail(item.getThumbnails(), 640)));
-            overridePendingTransition(0, 0);
+
+            @Override
+            public boolean inTail(StreamInfoItem item) {
+                return adapter.inTail(item);
+            }
+
+            @Override
+            public boolean pageable() {
+                return searched && adapter.itemCount() > 0;
+            }
+
+            @Override
+            public int mode() {
+                return OrvidApp.get().layoutMode();
+            }
+
+            @Override
+            public Query query() {
+                return query;
+            }
+
+            @Override
+            public void pick(StreamInfoItem item, long at) {
+                openItem(item, at);
+            }
+
+            @Override
+            public void turnOff(int serviceId) {
+                if (VideoAdapter.turnOff(MainActivity.this, serviceId) != null) dropOffSources();
+            }
+
+            @Override
+            public void more() {
+                loadMore();
+            }
         });
         com.orvid.web.WebSearch.prompter = new com.orvid.web.WebSearch.Prompter() {
             private android.app.Dialog dialog;
@@ -192,6 +219,18 @@ public final class MainActivity extends Activity implements Tor.Listener {
         adapter.registerDataSetObserver(new android.database.DataSetObserver() {
             @Override
             public void onChanged() {
+                updateCount();
+                pager.refresh();
+            }
+
+            @Override
+            public void onInvalidated() {
+                updateCount();
+            }
+        });
+        adapter.registerDataSetObserver(new android.database.DataSetObserver() {
+            @Override
+            public void onChanged() {
                 if (adapter.getCount() > 0) stopWait();
             }
         });
@@ -208,6 +247,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
                             int first = list.getFirstVisiblePosition();
                             int firstItem = first * VideoAdapter.columns(current);
                             adapter.setMode(mode);
+                            pager.setMode(mode);
                             list.setSelection(firstItem / VideoAdapter.columns(mode));
                         }
 
@@ -303,6 +343,33 @@ public final class MainActivity extends Activity implements Tor.Listener {
         showHome();
     }
 
+    private void openItem(StreamInfoItem item, long at) {
+        if (Ui.doubleTap()) return;
+        com.orvid.ext.ExtSource ext = com.orvid.ext.Registry.forUrl(item.getUrl());
+        if (ext != null ? ext.webPlayback : com.orvid.web.WebSites.forUrl(item.getUrl()) != null) {
+            startActivity(new Intent(this, WebPlayerActivity.class).putExtra(WebPlayerActivity.EXTRA_URL, item.getUrl()));
+            return;
+        }
+        PlayerActivity.clearBack();
+        startActivity(new Intent(this, PlayerActivity.class)
+                    .putExtra(PlayerActivity.EXTRA_START_MS, Math.max(0, at))
+                    .putExtra(PlayerActivity.EXTRA_TITLE, item.getName())
+                    .putExtra(PlayerActivity.EXTRA_AVATAR, Ui.thumbnail(item.getUploaderAvatars(), Ui.dp(this, 32)))
+                    .putExtra(PlayerActivity.EXTRA_DATE, PlayerActivity.dateOf(item))
+                    .putExtra(PlayerActivity.EXTRA_URL, item.getUrl())
+                    .putExtra(PlayerActivity.EXTRA_SEED, query == null ? null : query.plainQuery)
+                    .putExtra(PlayerActivity.EXTRA_SERVICE, item.getServiceId())
+                    .putExtra(PlayerActivity.EXTRA_THUMB, Ui.thumbnail(item.getThumbnails(), 640)));
+        overridePendingTransition(0, 0);
+    }
+
+    private SourcePager pager;
+
+    void sourceTurnedOff(int serviceId) {
+        dropOffSources();
+        pager.removed(serviceId);
+    }
+
     private MiniPlayer miniPlayer;
 
     private int logoTaps;
@@ -354,7 +421,31 @@ public final class MainActivity extends Activity implements Tor.Listener {
         view.setVisibility(View.VISIBLE);
     }
 
+    private static final int SEARCH_HISTORY_LIMIT = 20;
+    private final java.util.ArrayDeque<String[]> searchHistory = new java.util.ArrayDeque<>();
+    private String searchLabel;
+    private boolean restoringSearch;
+
+    private boolean backToPreviousSearch() {
+        String[] prev = searchHistory.poll();
+        if (prev == null) return false;
+        restoringSearch = true;
+        try {
+            field.setText(prev[1] != null ? prev[1] : prev[0]);
+            field.setSelection(field.length());
+            runSearch(prev[0]);
+        } finally {
+            restoringSearch = false;
+        }
+        if (fromMemory) {
+            int at = Integer.parseInt(prev[2]);
+            list.post(() -> list.setSelection(at));
+        }
+        return true;
+    }
+
     private void showHome() {
+        hideRefine();
         adapter.set(Collections.<StreamInfoItem>emptyList());
         if (com.orvid.ext.Registry.empty()) showEmpty();
         else showMessage(getString(R.string.tagline));
@@ -391,6 +482,16 @@ public final class MainActivity extends Activity implements Tor.Listener {
         list.removeCallbacks(devRefresh);
         if (com.orvid.app.DevInfo.on) list.postDelayed(devRefresh, DEV_REFRESH_MS);
         miniPlayer.attach();
+        if (deadSeen != com.orvid.search.Dead.version()) {
+            deadSeen = com.orvid.search.Dead.version();
+            adapter.prune();
+        }
+    }
+
+    private int deadSeen;
+
+    boolean hasQuery() {
+        return query != null && query.plainQuery != null && !query.plainQuery.trim().isEmpty();
     }
 
     @Override
@@ -538,6 +639,12 @@ public final class MainActivity extends Activity implements Tor.Listener {
             return;
         }
         dismissSuggest();
+        hideRefine();
+        if (!restoringSearch && query != null && lastInput != null && !lastInput.equals(input)) {
+            searchHistory.push(new String[] {lastInput, searchLabel, Integer.toString(list.getFirstVisiblePosition())});
+            while (searchHistory.size() > SEARCH_HISTORY_LIMIT) searchHistory.removeLast();
+        }
+        searchLabel = field.getText().toString();
         if (com.orvid.ext.Registry.empty()) {
             if (running != null) running.cancel();
             running = null;
@@ -549,6 +656,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         OrvidApp.get().images().warm();
         if (running != null) running.cancel();
         running = null;
+        pager.reset();
         adapter.set(Collections.<StreamInfoItem>emptyList());
         message.setVisibility(View.GONE);
         addRepo.setVisibility(View.GONE);
@@ -599,6 +707,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         }
         adapter.setQuery(q);
         searched = true;
+        updateCount();
         final int generation = ++searchGeneration;
         synchronized (stragglers) {
             stragglers.clear();
@@ -1292,6 +1401,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         devStatus(source, items.size() + " " + (android.os.SystemClock.uptimeMillis() - searchStarted) / 100 / 10.0 + "s");
         traceSet(generation, source, getString(R.string.trace_results, items.size()), true);
         if (source < healthCount.length) healthCount[source] = Math.max(0, healthCount[source]) + items.size();
+        if (source != 0) adapter.warmHosts(items);
         pendingSources--;
         if (arrived == null) {
             arrived = new ArrayList<>();
@@ -1392,6 +1502,62 @@ public final class MainActivity extends Activity implements Tor.Listener {
         list.setSelection(0);
         stopPrepare();
         list.postDelayed(prepareVisible, PREPARE_IDLE_MS);
+        refreshRefine();
+    }
+
+    private android.widget.HorizontalScrollView refineRow;
+    private android.widget.LinearLayout refineChips;
+    private View refineBar;
+    private TextView resultCount;
+
+    private void updateCount() {
+        int n = adapter == null ? 0 : adapter.itemCount();
+        boolean show = searched && hasQuery() && n > 0;
+        if (show) resultCount.setText(getResources().getQuantityString(R.plurals.result_count, n, n));
+        resultCount.setVisibility(show ? View.VISIBLE : View.GONE);
+        refineBar.setVisibility(show || refineRow.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE);
+    }
+    private List<com.orvid.search.Refine.Choice> refineShown = Collections.emptyList();
+
+    private void hideRefine() {
+        refineShown = Collections.emptyList();
+        refineChips.removeAllViews();
+        refineRow.setVisibility(View.GONE);
+        updateCount();
+    }
+
+    private void refreshRefine() {
+        List<com.orvid.search.Refine.Choice> next = adapter.itemCount() == 0 || !hasQuery()
+                ? Collections.<com.orvid.search.Refine.Choice>emptyList() : com.orvid.search.Refine.of(query, adapter.items());
+        if (next.equals(refineShown)) return;
+        if (next.isEmpty()) {
+            hideRefine();
+            return;
+        }
+        refineShown = next;
+        refineChips.removeAllViews();
+        for (com.orvid.search.Refine.Choice choice : next) {
+            TextView chip = new TextView(this);
+            chip.setText(choice.label);
+            chip.setSingleLine(true);
+            chip.setBackgroundResource(R.drawable.bg_chip);
+            chip.setTextColor(getColorStateList(R.color.chip_text));
+            chip.setTextSize(13);
+            chip.setPadding(Ui.dp(this, 12), Ui.dp(this, 5), Ui.dp(this, 12), Ui.dp(this, 5));
+            chip.setOnClickListener(v -> {
+                if (Ui.doubleTap()) return;
+                field.setText(choice.label);
+                field.setSelection(choice.label.length());
+                runSearch(choice.query);
+            });
+            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMarginEnd(Ui.dp(this, 6));
+            refineChips.addView(chip, lp);
+        }
+        refineRow.scrollTo(0, 0);
+        refineRow.setVisibility(View.VISIBLE);
+        updateCount();
     }
 
     private void stopPrepare() {
@@ -1488,6 +1654,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         for (StreamInfoItem i : current.subList(keep, current.size())) if (seen.add(VideoAdapter.key(i))) tail.add(i);
         adapter.set(com.orvid.search.Ranker.Ranked.of(head, tail));
         com.orvid.play.Session.lastSearch = adapter.items();
+        if (pendingSources <= 0) refreshRefine();
     }
 
     private void sourceFailed(int generation, int source, Exception e) {
@@ -1516,6 +1683,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
         if (pendingSources <= 0 && !searchLogged && searched) {
             searchLogged = true;
             Diag.mark("search done");
+            refreshRefine();
         }
         if (!deferred.isEmpty() && pendingSources <= deferred.size()) releaseDeferred();
         if (pendingSources <= 0) judgeHealth();
@@ -1832,11 +2000,16 @@ public final class MainActivity extends Activity implements Tor.Listener {
             }));
         }
         List<String> lists = new ArrayList<>();
+        java.util.Set<String> titled = new java.util.HashSet<>();
+        boolean artistQuery = first.artistName != null && com.orvid.search.Ranker.covers(q, first.artistName);
         String uploads = com.orvid.yt.Playlist.uploads(first.artistId);
         if (uploads != null) lists.add(uploads);
         for (String id : first.albums) if (lists.size() <= MAX_ALBUMS) lists.add(id);
         for (int i = 0; i < first.playlists.size() && lists.size() <= MAX_ALBUMS; i++) {
-            if (com.orvid.search.Ranker.covers(q, first.playlistTitles.get(i))) lists.add(first.playlists.get(i));
+            if (com.orvid.search.Ranker.covers(q, first.playlistTitles.get(i))) {
+                lists.add(first.playlists.get(i));
+                titled.add(first.playlists.get(i));
+            }
         }
         for (String id : lists) {
             int pages = id.equals(uploads) ? ARTIST_PAGES : ALBUM_PAGES;
@@ -1849,7 +2022,7 @@ public final class MainActivity extends Activity implements Tor.Listener {
                     p = Fetch.retrying(c, cc -> com.orvid.yt.Playlist.more(cc, token));
                     all.addAll(p.items);
                 }
-                com.orvid.search.Ranker.vouch(all);
+                if (artistQuery || titled.contains(id)) com.orvid.search.Ranker.vouch(all);
                 extendYouTube(generation, all);
                 return null;
             }));
@@ -1915,6 +2088,9 @@ public final class MainActivity extends Activity implements Tor.Listener {
     }
 
     private void goHome() {
+        pager.reset();
+        searchHistory.clear();
+        hideRefine();
         if (searchScope != null) searchScope.cancel();
         adultLater.clear();
         if (running != null) running.cancel();
@@ -1936,6 +2112,11 @@ public final class MainActivity extends Activity implements Tor.Listener {
 
     @Override
     public void onBackPressed() {
+        if (pager.index() > 0) {
+            pager.back();
+            return;
+        }
+        if (!onHome() && backToPreviousSearch()) return;
         if (searching || !onHome()) {
             goHome();
             return;

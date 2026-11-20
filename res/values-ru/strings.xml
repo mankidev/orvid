@@ -153,6 +153,7 @@
     <string name="queued">В очереди: %1$d</string>
     <string name="autoplay">Автовоспроизведение</string>
     <string name="loop">Повтор</string>
+    <string name="swipe_mode">Режим свайпа</string>
     <string name="up_next">Далее через %1$d: %2$s
 Нажмите, чтобы отменить</string>
     <string name="block_screenshots">Запретить скриншоты и запись экрана</string>
@@ -180,6 +181,14 @@
     <string name="share">Поделиться</string>
     <string name="hide_known">Уже видел</string>
     <string name="hide_known_done">Скрыто. Больше не появится в результатах.</string>
-    <string name="hidden_videos">Скрытые видео</string>
-    <string name="hidden_clear">Снова показать скрытые видео (%d)</string>
+    <string name="your_data">Твои данные</string>
+    <string name="data_clear">Удалить данные</string>
+    <string name="data_clear_message">Видео с отметкой «Уже видел» снова будут показываться.</string>
+    <string name="data_clear_confirm">Удалить</string>
+    <plurals name="result_count">
+        <item quantity="one">%d результат</item>
+        <item quantity="few">%d результата</item>
+        <item quantity="many">%d результатов</item>
+        <item quantity="other">%d результата</item>
+    </plurals>
 </resources>

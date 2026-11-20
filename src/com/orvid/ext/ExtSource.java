@@ -122,8 +122,28 @@ public final class ExtSource extends Source {
     @Override
     public Page search(String circuit, String query, Filters f, String next) throws Exception {
         if (html != null) {
-            HtmlTube.Page p = spread(circuit, c -> html.search(c, query, next), new String[1]);
-            return new Page(p.items, p.next);
+            String tag = next == null && adult ? html.tagFor(query) : null;
+            Fetch.Scope lane = null;
+            java.util.concurrent.Future<List<StreamInfoItem>> tagged = null;
+            if (tag != null) {
+                Fetch.Scope parent = Fetch.scope();
+                Fetch.Scope own = parent != null ? parent.lane() : new Fetch.Scope();
+                lane = own;
+                tagged = TAGS.submit(() -> Fetch.within(own, () -> html.tagged(circuit, tag)));
+            }
+            HtmlTube.Page p;
+            try {
+                p = spread(circuit, c -> html.search(c, query, next), new String[1]);
+            } catch (Exception e) {
+                if (tagged != null) {
+                    tagged.cancel(true);
+                    lane.cancel();
+                }
+                throw e;
+            }
+            Page out = new Page(p.items, p.next);
+            if (tagged != null) addTagged(out, query, tagged, lane);
+            return out;
         }
         JsonObject out = spread(circuit, c -> script.call(c, "search", query, next), new String[1]);
         if (out == null) throw new IOException(key + ": no search");
@@ -138,6 +158,35 @@ public final class ExtSource extends Source {
         p.next = out.getString("next", null);
         p.skipped = out.getBoolean("skip", false) && p.items.isEmpty();
         return p;
+    }
+
+    private static final long TAG_WAIT_MS = 2000;
+    private static final java.util.concurrent.ExecutorService TAGS = java.util.concurrent.Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "tags");
+        t.setDaemon(true);
+        return t;
+    });
+
+    private void addTagged(Page out, String query, java.util.concurrent.Future<List<StreamInfoItem>> tagged, Fetch.Scope lane) {
+        List<StreamInfoItem> extra;
+        try {
+            extra = tagged.get(TAG_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            tagged.cancel(true);
+            lane.cancel();
+            com.orvid.net.Diag.mark(key + " tag page skipped: " + e.getClass().getSimpleName());
+            return;
+        }
+        com.orvid.search.Query q = com.orvid.search.Query.parse(query);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (StreamInfoItem item : out.items) seen.add(item.getUrl());
+        int added = 0;
+        for (StreamInfoItem item : extra) {
+            if (!com.orvid.search.Ranker.covers(q, item.getName()) || !seen.add(item.getUrl())) continue;
+            out.items.add(item);
+            added++;
+        }
+        com.orvid.net.Diag.mark(key + " tag page +" + added + " of " + extra.size());
     }
 
     private StreamInfoItem item(JsonObject o, String url) {
@@ -223,6 +272,7 @@ public final class ExtSource extends Source {
     }
 
     public List<String> tags(String circuit, String url) throws IOException {
+        if (html != null) return html.tags(circuit, url);
         List<String> out = new ArrayList<>();
         if (script == null) return out;
         JsonObject o = script.call(circuit, "tags", url, null);

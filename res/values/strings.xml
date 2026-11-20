@@ -157,6 +157,7 @@
     <string name="queued">In queue: %1$d</string>
     <string name="autoplay">Autoplay</string>
     <string name="loop">Loop</string>
+    <string name="swipe_mode">Swipe mode</string>
     <string name="up_next">Up next in %1$d: %2$s
 Tap to cancel</string>
     <string name="block_screenshots">Block screenshots and screen recording</string>
@@ -184,6 +185,12 @@ Tap to cancel</string>
     <string name="share">Share</string>
     <string name="hide_known">I\'ve seen this</string>
     <string name="hide_known_done">Hidden. It won\'t show up in results again.</string>
-    <string name="hidden_videos">Hidden videos</string>
-    <string name="hidden_clear">Show hidden videos again (%d)</string>
+    <string name="your_data">Your data</string>
+    <string name="data_clear">Delete data</string>
+    <string name="data_clear_message">Videos you marked as \'I\'ve seen this\' will be shown again.</string>
+    <string name="data_clear_confirm">Delete</string>
+    <plurals name="result_count">
+        <item quantity="one">%d result</item>
+        <item quantity="other">%d results</item>
+    </plurals>
 </resources>

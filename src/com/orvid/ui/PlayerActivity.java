@@ -71,7 +71,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class PlayerActivity extends Activity implements com.orvid.app.Job.Scoped, com.orvid.cast.Cast.Listener, CastPanel.Host {
+public class PlayerActivity extends Activity implements com.orvid.app.Job.Scoped, com.orvid.cast.Cast.Listener, CastPanel.Host {
 
     private final com.orvid.net.Fetch.Scope jobScope = new com.orvid.net.Fetch.Scope();
     private final com.orvid.net.Fetch.Scope relatedScope = new com.orvid.net.Fetch.Scope().background();
@@ -90,6 +90,8 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     public static final String EXTRA_SERVICE = "service";
     public static final String EXTRA_THUMB = "thumb";
     public static final String EXTRA_INSTANT = "instant";
+    public static final String EXTRA_FEED_ENTER = "feed_enter";
+    private static final int FEED_SLIDE_MS = 220;
     public static final String EXTRA_START_MS = "start_ms";
     public static final String EXTRA_TITLE = "title";
     public static final String EXTRA_AVATAR = "avatar";
@@ -139,6 +141,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     private View buffering;
     private TextView debug;
     private TextView subtitle;
+    private final com.orvid.play.CueLines cueLines = new com.orvid.play.CueLines();
     private TextView description;
     private ImageView expand;
     private PlayerControls controls;
@@ -183,6 +186,11 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         });
         details = findViewById(R.id.details);
         buffering = findViewById(R.id.buffering);
+        feed = OrvidApp.get().swipeMode();
+        if (feed && state == null) {
+            buffering.setVisibility(View.GONE);
+            buffering.postDelayed(spinnerShow, FEED_SPINNER_DELAY_MS);
+        }
         debug = findViewById(R.id.debug);
         debugHold = new android.view.GestureDetector(this, new android.view.GestureDetector.SimpleOnGestureListener() {
             @Override
@@ -254,6 +262,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         applyDebug();
 
         pageUrl = linkFrom(getIntent());
+        FeedCache.visit(pageUrl);
         resumeAt = Math.max(0, getIntent().getLongExtra(EXTRA_START_MS, 0));
         final boolean reuse = pageUrl != null && Session.has(pageUrl);
         seed = reuse ? Session.seed : getIntent().getStringExtra(EXTRA_SEED);
@@ -261,7 +270,12 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         if (state != null && !reuse) resumeAt = Math.max(resumeAt, state.getLong(STATE_POSITION, 0));
         String thumb = reuse ? Session.thumb : getIntent().getStringExtra(EXTRA_THUMB);
         coverUrl = thumb;
-        if (thumb != null) {
+        android.graphics.Bitmap handed = FeedPreload.takeFrame(pageUrl);
+        if (handed != null) {
+            poster.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            poster.setImageBitmap(handed);
+            poster.post(this::accentFromCover);
+        } else if (thumb != null && !OrvidApp.get().swipeMode()) {
             OrvidApp.get().images().load(poster, thumb,
                     Math.min(640, getResources().getDisplayMetrics().widthPixels), pageUrl);
             poster.post(this::accentFromCover);
@@ -270,28 +284,14 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         if (reuse) {
             player = Session.player();
         } else {
-            player = new ExoPlayer.Builder(getApplicationContext(),
-                    new androidx.media3.exoplayer.DefaultRenderersFactory(getApplicationContext()) {
-                        @Override
-                        protected androidx.media3.exoplayer.audio.AudioSink buildAudioSink(
-                                android.content.Context context, boolean floatOutput, boolean playbackParams) {
-                            return new androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
-                                    .setEnableAudioTrackPlaybackParams(true)
-                                    .build();
-                        }
-                    })
-                .setBandwidthMeter(new DefaultBandwidthMeter.Builder(getApplicationContext())
-                        .setInitialBitrateEstimate(com.orvid.play.Warm.startBitrate())
-                        .build())
-                .setTrackSelector(new DefaultTrackSelector(getApplicationContext(),
-                        new AdaptiveTrackSelection.Factory(3000, 25000, 25000, 0.75f)))
-                .setLoadControl(new DefaultLoadControl.Builder()
-                        .setBufferDurationsMs(15000, 60000, 700, 2000)
-                        .build())
-                .build();
-            player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build());
+            player = FeedPreload.take(pageUrl);
+            handoff = player != null;
+            if (player == null) player = newPlayer(getApplicationContext(), defaultLoad());
             if (pageUrl != null) Session.begin(player, pageUrl, thumb);
+            if (handoff && player.getPlayerError() == null) {
+                if (player.getPlaybackState() == Player.STATE_IDLE) player.prepare();
+                player.setPlayWhenReady(true);
+            }
         }
         player.setVideoTextureView(surface);
         player.addListener(playerListener = new Player.Listener() {
@@ -299,11 +299,11 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             public void onPlaybackStateChanged(int state) {
                 stage.removeCallbacks(stallWatch);
                 if (state == Player.STATE_BUFFERING) {
-                    buffering.setVisibility(View.VISIBLE);
+                    setBuffering(true);
                     Diag.mark("player buffering");
                     watchStall();
                 } else if (state == Player.STATE_READY) {
-                    buffering.setVisibility(View.GONE);
+                    setBuffering(false);
                     Diag.mark("player ready");
                     applySprite();
                     cancelUpNext();
@@ -319,12 +319,12 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                     Diag.mark("player first frame");
                 }
                 firstFrame = true;
-                poster.setVisibility(View.GONE);
+                hidePosterWhenDrawn();
                 stage.removeCallbacks(sampler);
                 stage.postDelayed(sampler, 200);
                 stage.postDelayed(PlayerActivity.this::loadRelated, relatedEarly != null ? 0 : 400);
                 stage.removeCallbacks(warmNext);
-                stage.postDelayed(warmNext, NEXT_WARM_CHECK_MS);
+                stage.postDelayed(warmNext, feed ? 0 : NEXT_WARM_CHECK_MS);
             }
 
             @Override
@@ -336,15 +336,29 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             }
 
             @Override
+            public void onPositionDiscontinuity(Player.PositionInfo oldPosition, Player.PositionInfo newPosition, int reason) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) cueLines.reset();
+            }
+
+            @Override
             public void onCues(CueGroup cues) {
-                StringBuilder sb = new StringBuilder();
-                for (Cue c : cues.cues) {
-                    if (c.text == null) continue;
-                    if (sb.length() > 0) sb.append('\n');
-                    sb.append(c.text);
+                List<CharSequence> texts = new ArrayList<>();
+                for (Cue c : cues.cues) texts.add(c.text);
+                List<String> lines = com.orvid.play.CueLines.split(texts);
+                List<String> show = cueLines.next(lines);
+                if (show == null) return;
+                if (show.size() == lines.size()) {
+                    StringBuilder sb = new StringBuilder();
+                    for (Cue c : cues.cues) {
+                        if (c.text == null) continue;
+                        if (sb.length() > 0) sb.append('\n');
+                        sb.append(c.text);
+                    }
+                    subtitle.setText(sb);
+                } else {
+                    subtitle.setText(String.join("\n", show));
                 }
-                subtitle.setText(sb);
-                subtitle.setVisibility(sb.length() == 0 ? View.GONE : View.VISIBLE);
+                subtitle.setVisibility(show.isEmpty() ? View.GONE : View.VISIBLE);
             }
 
             @Override
@@ -366,6 +380,13 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && liveRecovers < LIVE_RECOVERS) {
                     liveRecovers++;
                     player.seekToDefaultPosition();
+                    player.prepare();
+                    return;
+                }
+                if (error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED && decoderFrees < 2) {
+                    decoderFrees++;
+                    Diag.mark("decoder busy, freeing waiting players");
+                    FeedPreload.freeDecoders();
                     player.prepare();
                     return;
                 }
@@ -423,7 +444,10 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         sheet = findViewById(R.id.sheet);
         sheet.setScroller(details);
         sheet.setListener(this::minimize);
+        buildFeedInfo();
         applyLayout(getResources().getConfiguration().orientation);
+        if (feed) stage.post(warmNext);
+        finishPrevious();
         if (!getIntent().getBooleanExtra(EXTRA_INSTANT, false)) {
             sheet.setTranslationY(getResources().getDisplayMetrics().heightPixels);
             sheet.animate().translationY(0).setDuration(220)
@@ -623,7 +647,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         videoWidth = size.width;
         videoHeight = size.height;
         stage.post(this::fitSurface);
-        buffering.setVisibility(player.getPlaybackState() == Player.STATE_BUFFERING ? View.VISIBLE : View.GONE);
+        setBuffering(player.getPlaybackState() == Player.STATE_BUFFERING);
         controls.onPlaybackStateChanged(player.getPlaybackState());
         controls.onIsPlayingChanged(player.isPlaying());
         controls.onTracksChanged(player.getCurrentTracks());
@@ -749,12 +773,48 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         BACK.clear();
     }
 
+    private static final java.util.ArrayDeque<String[]> FORWARD = new java.util.ArrayDeque<>();
+
+    private String[] currentEntry() {
+        String shown = ((TextView) header.findViewById(R.id.name)).getText().toString();
+        return new String[] {pageUrl, Integer.toString(getIntent().getIntExtra(EXTRA_SERVICE, -1)), coverUrl, shown, seed};
+    }
+
+    private void pushBack() {
+        if (pageUrl == null) return;
+        BACK.push(currentEntry());
+        while (BACK.size() > BACK_LIMIT) BACK.removeLast();
+    }
+
+    private void parkCurrent(String upcoming) {
+        if (pageUrl == null || Session.player() != player || player.getPlayerError() != null) return;
+        FeedPreload.remember(pageUrl, lastFrame(), Math.max(0, player.getCurrentPosition()));
+        Session.detach();
+        FeedPreload.park(pageUrl, player, upcoming);
+    }
+
+    private static final int LAST_FRAME_W = 540;
+
+    private android.graphics.Bitmap lastFrame() {
+        int w = surface.getWidth();
+        int h = surface.getHeight();
+        if (!surface.isAvailable() || w == 0 || h == 0) return null;
+        int bw = Math.min(LAST_FRAME_W, w);
+        android.graphics.Bitmap b = surface.getBitmap(bw, Math.max(1, Math.round((float) h * bw / w)));
+        return b != null && hasPicture(b) ? b : null;
+    }
+
+    private void openForward() {
+        String[] next = FORWARD.poll();
+        if (next == null) return;
+        pushBack();
+        resumeFromFrame(next[0]);
+        switchTo(next[0], Integer.parseInt(next[1]), next[2], next[3], next.length > 4 ? next[4] : null);
+    }
+
     private void openRelated(StreamInfoItem item) {
-        if (pageUrl != null) {
-            String shown = ((TextView) header.findViewById(R.id.name)).getText().toString();
-            BACK.push(new String[] {pageUrl, Integer.toString(getIntent().getIntExtra(EXTRA_SERVICE, -1)), coverUrl, shown, seed});
-            while (BACK.size() > BACK_LIMIT) BACK.removeLast();
-        }
+        FORWARD.clear();
+        pushBack();
         nextAvatar = Ui.thumbnail(item.getUploaderAvatars(), Ui.dp(this, 32));
         nextDate = dateOf(item);
         switchTo(item.getUrl(), item.getServiceId(), Ui.thumbnail(item.getThumbnails(), 640), item.getName(), null);
@@ -835,8 +895,473 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         upNext = null;
     }
 
+    private int feedEnter;
+    private ImageView feedPeek;
+    private FrameLayout feedPeekBox;
+    private android.view.TextureView peekVideo;
+    private ExoPlayer peekPlayer;
+    private String peekUrl;
+    private int peekSide;
+
+    private final Player.Listener peekListener = new Player.Listener() {
+        @Override
+        public void onVideoSizeChanged(VideoSize size) {
+            if (peekPlayer != null && !isFinishing()) fitPeek(peekPlayer);
+        }
+
+        @Override
+        public void onPlaybackStateChanged(int state) {
+            if (state == Player.STATE_READY && !isFinishing() && !peekDrawn) redrawPeek();
+        }
+
+        @Override
+        public void onRenderedFirstFrame() {
+            peekDrawn = true;
+            peekVideo.removeCallbacks(peekRedraw);
+            feedNote("next frame ready");
+            peekCaptures = 0;
+            peekVideo.removeCallbacks(capturePeek);
+            peekVideo.postDelayed(capturePeek, PEEK_CAPTURE_MS);
+        }
+    };
+
+    private boolean peekDrawn;
+    private static final long PEEK_FIRST_FRAME_WAIT_MS = 600;
+
+    private void showPeekVideo(String url) {
+        ExoPlayer p = FeedPreload.peek(url);
+        if (p == null) {
+            peekVideo.setVisibility(View.GONE);
+            return;
+        }
+        if (p != peekPlayer) {
+            if (peekPlayer != null) peekPlayer.removeListener(peekListener);
+            peekPlayer = p;
+            peekPlayerUrl = url;
+            peekCapture = null;
+            peekCaptureUrl = null;
+            peekVideo.removeCallbacks(capturePeek);
+            p.addListener(peekListener);
+            peekDrawn = false;
+            p.setVideoSurface(peekSurface());
+            peekSeeks = 0;
+            feedNote("next attached");
+            redrawPeek();
+        }
+        fitPeek(p);
+        peekVideo.setVisibility(url.equals(peekCaptureUrl) ? View.GONE : View.VISIBLE);
+    }
+
+    private String peekPlayerUrl;
+    private android.graphics.Bitmap peekCapture;
+    private String peekCaptureUrl;
+    private int peekCaptures;
+    private static final int PEEK_CAPTURE_TRIES = 6;
+    private static final long PEEK_CAPTURE_MS = 150;
+
+    private final Runnable capturePeek = new Runnable() {
+        @Override
+        public void run() {
+            ExoPlayer p = peekPlayer;
+            if (isFinishing() || p == null || peekPlayerUrl == null) return;
+            VideoSize size = p.getVideoSize();
+            int w = Math.max(1, Math.min(LAST_FRAME_W, stage.getWidth()));
+            int h = size.width > 0 && size.height > 0
+                    ? Math.max(1, Math.round(w * size.height / (size.width * size.pixelWidthHeightRatio)))
+                    : Math.max(1, w * 16 / 9);
+            android.graphics.Bitmap b = peekVideo.isAvailable() ? peekVideo.getBitmap(w, h) : null;
+            if (b == null || !hasPicture(b)) {
+                if (++peekCaptures < PEEK_CAPTURE_TRIES) {
+                    peekVideo.postDelayed(this, PEEK_CAPTURE_MS);
+                } else {
+                    feedNote("next frame capture empty, available=" + peekVideo.isAvailable());
+                }
+                return;
+            }
+            peekCapture = b;
+            peekCaptureUrl = peekPlayerUrl;
+            feedNote("next frame captured " + w + "x" + h);
+            if (peekSide == 0 || peekPlayerUrl.equals(peekUrl)) {
+                feedPeek.setTag(R.id.image_key, null);
+                feedPeek.setImageBitmap(b);
+                peekVideo.setVisibility(View.GONE);
+            }
+        }
+    };
+
+    private android.graphics.SurfaceTexture peekTexture;
+    private android.view.Surface peekSurface;
+    private int peekSeeks;
+    private static final int PEEK_SEEK_LIMIT = 2;
+
+    private android.view.Surface peekSurface() {
+        if (peekSurface == null || !peekSurface.isValid()) {
+            peekTexture = new android.graphics.SurfaceTexture(false);
+            peekSurface = new android.view.Surface(peekTexture);
+            peekVideo.setSurfaceTexture(peekTexture);
+        }
+        return peekSurface;
+    }
+
+    private void redrawPeek() {
+        peekVideo.removeCallbacks(peekRedraw);
+        if (!peekDrawn) peekVideo.postDelayed(peekRedraw, PEEK_FIRST_FRAME_WAIT_MS);
+    }
+
+    private void fitPeek(ExoPlayer p) {
+        VideoSize size = p.getVideoSize();
+        int w = stage.getWidth();
+        int h = stage.getHeight();
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) peekVideo.getLayoutParams();
+        if (size.width <= 0 || size.height <= 0 || w == 0 || h == 0) {
+            lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        } else {
+            float vw = size.width * size.pixelWidthHeightRatio;
+            float scale = Math.min(w / vw, (float) h / size.height);
+            lp.width = Math.round(vw * scale);
+            lp.height = Math.round(size.height * scale);
+        }
+        peekVideo.setLayoutParams(lp);
+    }
+
+    private static final long PEEK_ATTACH_MS = 250;
+    private static final int PEEK_ATTACH_TRIES = 120;
+    private int peekAttaches;
+    private String peekTarget;
+
+    private final Runnable peekRedraw = new Runnable() {
+        @Override
+        public void run() {
+            ExoPlayer p = peekPlayer;
+            if (isFinishing() || p == null || peekDrawn || p.getPlaybackState() != Player.STATE_READY) return;
+            if (peekSeeks < PEEK_SEEK_LIMIT) {
+                peekSeeks++;
+                feedNote("next frame redraw " + peekSeeks);
+                p.seekTo(p.getCurrentPosition());
+                peekVideo.postDelayed(this, PEEK_FIRST_FRAME_WAIT_MS * 2);
+            } else {
+                feedNote("next frame missing");
+            }
+        }
+    };
+
+    private final Runnable peekAttach = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || !feed || peekTarget == null || peekSide != 0) return;
+            if (FeedPreload.peek(peekTarget) == null) {
+                if (++peekAttaches < PEEK_ATTACH_TRIES) stage.postDelayed(this, PEEK_ATTACH_MS);
+                return;
+            }
+            feedPeekBox.setTranslationY(stage.getHeight());
+            feedPeekBox.setVisibility(View.VISIBLE);
+            showPeekVideo(peekTarget);
+        }
+    };
+
+    private void attachPeekWhenReady(String url) {
+        peekTarget = url;
+        peekAttaches = 0;
+        stage.removeCallbacks(peekAttach);
+        stage.post(peekAttach);
+    }
+
+    private android.graphics.Bitmap peekFrame() {
+        if (peekVideo.getVisibility() == View.VISIBLE && peekVideo.isAvailable()) {
+            android.graphics.Bitmap b = peekVideo.getBitmap();
+            if (b != null && hasPicture(b)) return b;
+        }
+        android.graphics.drawable.Drawable d = feedPeek.getDrawable();
+        return d instanceof android.graphics.drawable.BitmapDrawable ? ((android.graphics.drawable.BitmapDrawable) d).getBitmap() : null;
+    }
+
+    private android.graphics.Bitmap freezePeek() {
+        android.graphics.Bitmap b = peekFrame();
+        if (b != null && peekVideo.getVisibility() == View.VISIBLE) {
+            feedPeek.setTag(R.id.image_key, null);
+            feedPeek.setImageBitmap(b);
+            peekVideo.setVisibility(View.GONE);
+        }
+        return b;
+    }
+
+    private static boolean hasPicture(android.graphics.Bitmap b) {
+        int w = b.getWidth();
+        int h = b.getHeight();
+        for (int y = 1; y < 4; y++) {
+            for (int x = 1; x < 4; x++) {
+                int c = b.getPixel(w * x / 4, h * y / 4);
+                if ((c & 0xFF000000) != 0 && (c & 0x00FFFFFF) != 0) return true;
+            }
+        }
+        return false;
+    }
+
+    void feedDrag(float dy) {
+        if (feedLeaving && peekSide != 0) return;
+        int side = dy < 0 ? 1 : -1;
+        if (side == peekSide) return;
+        peekSide = side;
+        String thumb = null;
+        String page = null;
+        if (side > 0 && !FORWARD.isEmpty()) {
+            thumb = FORWARD.peek()[2];
+            page = FORWARD.peek()[0];
+        } else if (side > 0) {
+            StreamInfoItem next = feedTarget();
+            if (next != null) {
+                thumb = Ui.thumbnail(next.getThumbnails(), 640);
+                page = next.getUrl();
+            }
+        } else {
+            String[] last = BACK.peek();
+            if (last != null) {
+                thumb = last[2];
+                page = last[0];
+            }
+        }
+        peekUrl = page;
+        if (thumb == null && page == null) {
+            feedPeekBox.setVisibility(View.INVISIBLE);
+            return;
+        }
+        feedPeek.setTag(R.id.image_key, null);
+        feedPeek.setImageBitmap(page != null && page.equals(peekCaptureUrl) ? peekCapture : FeedPreload.lastFrame(page));
+        showPeekVideo(page);
+        feedPeekBox.setTranslationY(side * stage.getHeight());
+        feedPeekBox.setVisibility(View.VISIBLE);
+    }
+
+    void feedRest() {
+        peekSide = 0;
+        if (feed && peekPlayer != null && peekPlayer == FeedPreload.peek(peekTarget)) {
+            feedPeekBox.setTranslationY(stage.getHeight());
+            boolean still = peekPlayerUrl != null && peekPlayerUrl.equals(peekCaptureUrl);
+            if (still) {
+                feedPeek.setTag(R.id.image_key, null);
+                feedPeek.setImageBitmap(peekCapture);
+            }
+            peekVideo.setVisibility(still ? View.GONE : View.VISIBLE);
+            return;
+        }
+        feedPeekBox.setVisibility(View.INVISIBLE);
+    }
+
+    private boolean feedLeaving;
+
+    boolean feedLeaving() {
+        return feedLeaving;
+    }
+
+    boolean swipe(boolean forward) {
+        if (feedLeaving) return true;
+        Runnable go;
+        if (forward && !FORWARD.isEmpty()) {
+            String ahead = FORWARD.peek()[0];
+            go = () -> {
+                if (FORWARD.isEmpty() || !ahead.equals(FORWARD.peek()[0])) return;
+                FeedPreload.handFrame(ahead, freezePeek());
+                parkCurrent(ahead);
+                openForward();
+            };
+        } else if (forward) {
+            StreamInfoItem item = com.orvid.play.Queue.poll();
+            if (item == null) item = feedCandidate();
+            if (item == null) {
+                waitForFeed();
+                return false;
+            }
+            StreamInfoItem target = item;
+            go = () -> {
+                FeedPreload.handFrame(target.getUrl(), freezePeek());
+                parkCurrent(target.getUrl());
+                openRelated(target);
+            };
+        } else {
+            if (BACK.isEmpty()) return false;
+            String back = BACK.peek()[0];
+            go = () -> {
+                if (BACK.isEmpty() || !back.equals(BACK.peek()[0])) return;
+                FeedPreload.handFrame(back, freezePeek());
+                if (pageUrl != null) FORWARD.push(currentEntry());
+                parkCurrent(back);
+                openPrevious();
+            };
+        }
+        feedLeaving = true;
+        cancelUpNext();
+        stopFeedWait();
+        feedEnter = forward ? 1 : -1;
+        feedDrag(forward ? -1 : 1);
+        int h = stage.getHeight();
+        float left = Math.abs((forward ? -h : h) - stage.getTranslationY()) / Math.max(1f, h);
+        long duration = Math.max(80, (long) (FEED_SLIDE_MS * left));
+        Diag.mark("feed swipe " + (forward ? "forward" : "back"));
+        Runnable step = new Runnable() {
+            private boolean ran;
+
+            @Override
+            public void run() {
+                if (ran || isFinishing()) return;
+                ran = true;
+                stage.removeCallbacks(this);
+                go.run();
+                if (!feedSwitched) feedRecover();
+            }
+        };
+        stage.animate().translationY(forward ? -h : h).alpha(1f).setDuration(duration)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator()).withEndAction(step).start();
+        stage.postDelayed(step, duration + FEED_STEP_SPARE_MS);
+        return true;
+    }
+
+    private static final long FEED_STEP_SPARE_MS = 400;
+    private boolean feedSwitched;
+
+    private void feedRecover() {
+        Diag.mark("feed swipe did not switch, back to current");
+        feedLeaving = false;
+        feedEnter = 0;
+        stage.animate().translationY(0f).alpha(1f).setDuration(200)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator()).withEndAction(this::feedRest).start();
+    }
+
+    private static boolean feedHides(StreamInfoItem item, String current) {
+        return item.getUrl() == null || item.getUrl().equals(current)
+                || com.orvid.search.NotInterested.hides(item);
+    }
+
+    private static final long FEED_WAIT_MS = 30000;
+    private static final long FEED_WARM_BUFFER_MS = 3000;
+    private static final long FEED_CHECK_MS = 1000;
+    private boolean feedPending;
+    private android.widget.ProgressBar feedWait;
+    private final Runnable feedGiveUp = this::stopFeedWait;
+
+    private static final int FEED_POOL = 8;
+    private static final double FEED_ORDER_COST = 0.12;
+    private static final double FEED_RELATED_COST = 0.5;
+    private static final int FEED_SHOWN_LIMIT = 500;
+    private static final java.util.Set<String> FEED_SHOWN = new java.util.LinkedHashSet<>();
+    private StreamInfoItem feedLocked;
+
+    private static void feedShown(String url) {
+        if (url == null) return;
+        FEED_SHOWN.remove(url);
+        FEED_SHOWN.add(url);
+        java.util.Iterator<String> it = FEED_SHOWN.iterator();
+        while (FEED_SHOWN.size() > FEED_SHOWN_LIMIT && it.hasNext()) {
+            it.next();
+            it.remove();
+        }
+    }
+
+    private boolean feedUsable(StreamInfoItem item) {
+        return !feedHides(item, pageUrl) && !FEED_SHOWN.contains(item.getUrl());
+    }
+
+    private StreamInfoItem feedCandidate() {
+        if (feedLocked != null && feedUsable(feedLocked)) return feedLocked;
+        if (feedHint != null && feedUsable(feedHint)) {
+            feedLocked = feedHint;
+            return feedLocked;
+        }
+        return feedPick(null, false);
+    }
+
+    private StreamInfoItem feedPick(StreamInfoItem skip, boolean fastOnly) {
+        List<StreamInfoItem> pool = new ArrayList<>();
+        List<Double> prior = new ArrayList<>();
+        List<StreamInfoItem> search = new ArrayList<>(Session.lastSearch);
+        int start = -1;
+        for (int i = 0; i < search.size(); i++) {
+            String u = search.get(i).getUrl();
+            if (u != null && (u.equals(pageUrl) || FEED_SHOWN.contains(u))) {
+                start = i;
+                break;
+            }
+        }
+        if (start >= 0) {
+            int n = 0;
+            for (int i = start + 1; i < search.size() && n < FEED_POOL; i++) {
+                if (!feedUsable(search.get(i)) || search.get(i) == skip || fastOnly && !fast(search.get(i))) continue;
+                pool.add(search.get(i));
+                prior.add(-FEED_ORDER_COST * n++);
+            }
+        }
+        List<StreamInfoItem> near = new ArrayList<>(related.items());
+        near.addAll(hiddenRelated);
+        int n = 0;
+        for (StreamInfoItem item : near) {
+            if (n >= FEED_POOL) break;
+            if (!feedUsable(item) || item == skip || pool.contains(item) || fastOnly && !fast(item)) continue;
+            pool.add(item);
+            prior.add(-FEED_RELATED_COST - FEED_ORDER_COST * n++);
+        }
+        if (pool.isEmpty()) return null;
+        int best = 0;
+        double top = Double.NEGATIVE_INFINITY;
+        for (int i = 0; i < pool.size(); i++) {
+            double s = prior.get(i);
+            if (s > top) {
+                top = s;
+                best = i;
+            }
+        }
+        return pool.get(best);
+    }
+
+
+    private StreamInfoItem feedTarget() {
+        StreamInfoItem queued = com.orvid.play.Queue.peek();
+        return queued != null ? queued : feedCandidate();
+    }
+
+    private void waitForFeed() {
+        feedPending = true;
+        feedWait.setVisibility(View.VISIBLE);
+        stage.removeCallbacks(feedGiveUp);
+        stage.postDelayed(feedGiveUp, FEED_WAIT_MS);
+        askMoreForFeed();
+    }
+
+    private void stopFeedWait() {
+        feedPending = false;
+        stage.removeCallbacks(feedGiveUp);
+        if (feedWait != null) feedWait.setVisibility(View.GONE);
+    }
+
+    private void askMoreForFeed() {
+        if (relatedPending == 0 && relatedRequested && !relatedLoading) loadMoreRelated();
+    }
+
+    private void feedArrived() {
+        if (!feed || isFinishing()) return;
+        if (feedPending) {
+            if (feedCandidate() != null) {
+                swipe(true);
+            } else if (relatedPending == 0) {
+                askMoreForFeed();
+            }
+            return;
+        }
+        if (!nextWarmed) {
+            stage.removeCallbacks(warmNext);
+            stage.post(warmNext);
+        }
+    }
+
+    private static StreamInfoItem unwatched(List<StreamInfoItem> list, String current) {
+        for (StreamInfoItem item : new ArrayList<>(list)) {
+            if (!feedHides(item, current)) return item;
+        }
+        return null;
+    }
+
     private void openPrevious() {
         String[] last = BACK.poll();
+        if (last != null) resumeFromFrame(last[0]);
         if (last != null) switchTo(last[0], Integer.parseInt(last[1]), last[2], last[3], last.length > 4 ? last[4] : null);
     }
 
@@ -861,10 +1386,32 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         OrvidApp.get().images().loadAvatar(avatar, use, Ui.dp(this, 32));
     }
 
+    private static final long FEED_SPINNER_DELAY_MS = 800;
+    private final Runnable spinnerShow = () -> buffering.setVisibility(View.VISIBLE);
+
+    private void setBuffering(boolean show) {
+        buffering.removeCallbacks(spinnerShow);
+        if (!show) {
+            buffering.setVisibility(View.GONE);
+        } else if (!feed) {
+            buffering.setVisibility(View.VISIBLE);
+        } else if (buffering.getVisibility() != View.VISIBLE) {
+            buffering.postDelayed(spinnerShow, FEED_SPINNER_DELAY_MS);
+        }
+    }
+
+    private long switchStartMs;
+
+    private void resumeFromFrame(String url) {
+        switchStartMs = feedLeaving && !FeedPreload.parked(url) ? FeedPreload.lastPosition(url) : 0;
+    }
+
     private void switchTo(String url, int service, String thumb, String title, String nextSeed) {
-        if (Ui.doubleTap()) return;
+        if (!feedLeaving && Ui.doubleTap()) return;
         rememberShown();
-        startActivity(new Intent(this, PlayerActivity.class)
+        boolean stayLandscape = feedEnter != 0
+                && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        startActivity(new Intent(this, stayLandscape ? PlayerLandscapeActivity.class : PlayerActivity.class)
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_AVATAR, nextAvatar)
                 .putExtra(EXTRA_DATE, nextDate)
@@ -872,10 +1419,20 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 .putExtra(EXTRA_SERVICE, service)
                 .putExtra(EXTRA_THUMB, thumb)
                 .putExtra(EXTRA_SEED, nextSeed)
+                .putExtra(EXTRA_FEED_ENTER, feedEnter)
+                .putExtra(EXTRA_START_MS, switchStartMs)
                 .putExtra(EXTRA_INSTANT, true));
+        switchStartMs = 0;
         overridePendingTransition(0, 0);
-        finish();
-        overridePendingTransition(0, 0);
+        if (feedLeaving) {
+            feedSwitched = true;
+            Diag.mark("feed switch");
+            peekVideo.removeCallbacks(capturePeek);
+            peekVideo.removeCallbacks(peekRedraw);
+            if (peekPlayer != null) peekPlayer.removeListener(peekListener);
+        }
+        leaving = new java.lang.ref.WeakReference<>(this);
+        stage.postDelayed(() -> closeQuietly(this), LEAVE_TIMEOUT_MS);
     }
 
     private static final int PREPARE_WAIT_S = 45;
@@ -902,8 +1459,13 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 Visionos.forget(videoId);
                 for (Throwable t = error; t != null; t = t.getCause()) {
                     if (t instanceof Visionos.AgeRestricted) {
-                        buffering.setVisibility(View.GONE);
+                        setBuffering(false);
                         showError(getString(R.string.error_age));
+                        return;
+                    }
+                    if (t instanceof Visionos.Removed) {
+                        setBuffering(false);
+                        showError(getString(R.string.error_unavailable));
                         return;
                     }
                 }
@@ -921,20 +1483,125 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         ((TextView) header.findViewById(R.id.uploader)).setText(v.author);
         if (v.channelId != null) channelUrl = "https://www.youtube.com/channel/" + v.channelId;
         description.setText(v.description);
+        setRelatedTopic(v.keywords, v.description);
         showFrames(com.orvid.play.Storyboard.parse(v.storyboard, v.lengthSeconds * 1000, circuit));
 
-        CircuitDataSource.Factory data = new CircuitDataSource.Factory(circuit, Visionos.USER_AGENT);
         sources.clear();
+        sources.addAll(youtubeSources(this, v, circuit, pageUrl));
+        if (sources.isEmpty()) {
+            loadNewPipe(true);
+            return;
+        }
+        startPlayback();
+        com.orvid.play.Warm.caption(circuit, likelyCaption(v.captions));
+    }
+
+    private boolean handoff;
+    private int decoderFrees;
+    private static final int POSTER_CHECKS = 20;
+    private static final long POSTER_CHECK_MS = 16;
+    private int posterChecks;
+    private final Runnable posterCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || poster.getVisibility() != View.VISIBLE) return;
+            if (++posterChecks >= POSTER_CHECKS || surface.isAvailable() && hasPicture(surface.getBitmap(16, 16))) {
+                poster.setVisibility(View.GONE);
+                return;
+            }
+            surface.postDelayed(this, POSTER_CHECK_MS);
+        }
+    };
+
+    private void hidePosterWhenDrawn() {
+        posterChecks = 0;
+        surface.removeCallbacks(posterCheck);
+        surface.post(posterCheck);
+    }
+
+    private static java.lang.ref.WeakReference<Activity> leaving;
+    private static final long LEAVE_TIMEOUT_MS = 1500;
+
+    private void finishPrevious() {
+        Activity prev = leaving == null ? null : leaving.get();
+        leaving = null;
+        if (prev == null || prev == this) return;
+        View decor = getWindow().getDecorView();
+        boolean[] done = new boolean[1];
+        android.view.ViewTreeObserver.OnDrawListener[] watch = new android.view.ViewTreeObserver.OnDrawListener[1];
+        watch[0] = () -> {
+            if (done[0]) return;
+            done[0] = true;
+            decor.post(() -> {
+                decor.getViewTreeObserver().removeOnDrawListener(watch[0]);
+                android.view.Choreographer.getInstance().postFrameCallback(t -> closeQuietly(prev));
+            });
+        };
+        decor.getViewTreeObserver().addOnDrawListener(watch[0]);
+    }
+
+    private static void closeQuietly(Activity a) {
+        if (a.isFinishing() || a.isDestroyed()) return;
+        a.finish();
+        a.overridePendingTransition(0, 0);
+    }
+    private static final long ADOPT_CHECK_MS = 1200;
+    private final Runnable adoptCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || firstFrame) return;
+            if (player.isPlaying() && player.getCurrentPosition() > 0) {
+                Diag.mark("adopted player: first frame not reported, showing video");
+                playerListener.onRenderedFirstFrame();
+                return;
+            }
+            stage.postDelayed(this, ADOPT_CHECK_MS);
+        }
+    };
+
+    static androidx.media3.exoplayer.LoadControl defaultLoad() {
+        return new DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15000, 60000, 700, 2000)
+                .build();
+    }
+
+    static ExoPlayer newPlayer(android.content.Context app, androidx.media3.exoplayer.LoadControl load) {
+        ExoPlayer p = new ExoPlayer.Builder(app,
+                new androidx.media3.exoplayer.DefaultRenderersFactory(app) {
+                    @Override
+                    protected androidx.media3.exoplayer.audio.AudioSink buildAudioSink(
+                            android.content.Context context, boolean floatOutput, boolean playbackParams) {
+                        return new androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                                .setEnableAudioTrackPlaybackParams(true)
+                                .build();
+                    }
+                })
+                .setBandwidthMeter(new DefaultBandwidthMeter.Builder(app)
+                        .setInitialBitrateEstimate(com.orvid.play.Warm.startBitrate())
+                        .build())
+                .setTrackSelector(new DefaultTrackSelector(app,
+                        new AdaptiveTrackSelection.Factory(3000, 25000, 25000, 0.75f)))
+                .setLoadControl(load)
+                .build();
+        p.setTrackSelectionParameters(p.getTrackSelectionParameters().buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build());
+        return p;
+    }
+
+    static List<MediaSource> youtubeSources(android.content.Context ctx, Visionos.Video v, String circuit, String page) {
+        List<MediaSource> out = new ArrayList<>();
+        androidx.media3.datasource.DataSource.Factory data =
+                FeedCache.wrap(new CircuitDataSource.Factory(circuit, Visionos.USER_AGENT), v.live ? null : page);
         List<Visionos.Format> videos = Dash.videoTracks(v.formats, 2160, com.orvid.play.Codecs.vp9MaxHeight());
         List<Visionos.Format> audios = Dash.audioTracks(v.formats);
         Visionos.Format audio = Dash.audioTrack(v.formats);
         if (!v.live && !videos.isEmpty() && audio != null && !audios.isEmpty()) {
             try {
-                List<Visionos.Caption> captions = Subtitles.withTranslation(this, v.captions);
+                List<Visionos.Caption> captions = Subtitles.withTranslation(ctx, v.captions);
                 String mpd = Dash.manifest(videos, audios, captions);
                 DashManifest manifest = new DashManifestParser().parse(Uri.parse("https://www.youtube.com/"),
                         new ByteArrayInputStream(mpd.getBytes(StandardCharsets.UTF_8)));
-                sources.add(new DashMediaSource.Factory(data)
+                out.add(new DashMediaSource.Factory(data)
                         .createMediaSource(manifest, MediaItem.fromUri(Uri.parse("https://www.youtube.com/"))));
                 Diag.mark("source dash " + videos.get(0).codec() + " " + videos.size() + " qualities, " + audios.size() + " audio, "
                         + captions.size() + " subtitles");
@@ -948,19 +1615,14 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             }
             if (top == null) top = videos.get(videos.size() - 1);
             ProgressiveMediaSource.Factory progressive = new ProgressiveMediaSource.Factory(data);
-            sources.add(new MergingMediaSource(
+            out.add(new MergingMediaSource(
                     progressive.createMediaSource(MediaItem.fromUri(top.url)),
                     progressive.createMediaSource(MediaItem.fromUri(audio.url))));
         }
         if (v.hls != null) {
-            sources.add(new HlsMediaSource.Factory(data).createMediaSource(MediaItem.fromUri(v.hls)));
+            out.add(new HlsMediaSource.Factory(data).createMediaSource(MediaItem.fromUri(v.hls)));
         }
-        if (sources.isEmpty()) {
-            loadNewPipe(true);
-            return;
-        }
-        startPlayback();
-        com.orvid.play.Warm.caption(circuit, likelyCaption(v.captions));
+        return out;
     }
 
     private static String likelyCaption(List<Visionos.Caption> captions) {
@@ -1106,6 +1768,10 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         @Override
         public void run() {
             if (isFinishing() || nextWarmed) return;
+            if (feed) {
+                warmFeed();
+                return;
+            }
             List<StreamInfoItem> next = related.items();
             if (!next.isEmpty() && !focused && player.getTotalBufferedDuration() >= NEXT_WARM_BUFFER_MS) {
                 nextWarmed = true;
@@ -1117,6 +1783,137 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 return;
             }
             stage.postDelayed(this, NEXT_WARM_CHECK_MS);
+        }
+    };
+
+    private StreamInfoItem feedLinked;
+    private static StreamInfoItem feedHint;
+    private int feedAsks;
+    private static final int FEED_ASK_LIMIT = 2;
+
+    private static final long FEED_LATE_START_MS = 4000;
+    private String feedNote;
+
+    private void feedNote(String note) {
+        if (note.equals(feedNote)) return;
+        feedNote = note;
+        Diag.mark("feed " + note);
+    }
+
+    private boolean currentSettled() {
+        return firstFrame || player.getPlayerError() != null
+                || android.os.SystemClock.uptimeMillis() - openedAt >= FEED_LATE_START_MS;
+    }
+
+    private void warmFeed() {
+        if (!FORWARD.isEmpty()) {
+            if (!currentSettled()) {
+                feedNote("forward waits for current video");
+                stage.postDelayed(warmNext, FEED_CHECK_MS);
+                return;
+            }
+            nextWarmed = true;
+            feedNote(FeedPreload.wake(FORWARD.peek()[0]) ? "forward video re-prepared" : "forward video not kept");
+            return;
+        }
+        StreamInfoItem target = feedTarget();
+        if (target == null) {
+            feedNote("no next video yet");
+            if (relatedRequested && feedAsks < FEED_ASK_LIMIT && relatedPending == 0 && !relatedLoading) {
+                feedAsks++;
+                askMoreForFeed();
+            }
+            stage.postDelayed(warmNext, FEED_CHECK_MS);
+            return;
+        }
+        if (target != feedLinked) {
+            feedLinked = target;
+            if (target != com.orvid.play.Queue.peek()) feedLocked = target;
+            com.orvid.play.Warm.link(target.getUrl());
+        }
+        long need = Fetch.torMode() ? FEED_WARM_BUFFER_MS : 0;
+        boolean waiting = firstFrame ? focused && player.getTotalBufferedDuration() < need : !currentSettled();
+        if (waiting) {
+            feedNote(firstFrame ? "next waits for buffer" : "next waits for current video");
+            stage.postDelayed(warmNext, FEED_CHECK_MS);
+            return;
+        }
+        nextWarmed = true;
+        if (FeedPreload.start(getApplicationContext(), target)) {
+            feedNote("preload " + target.getUrl());
+            attachPeekWhenReady(target.getUrl());
+            if (target != com.orvid.play.Queue.peek() && !feedRaced) {
+                feedRacing = target;
+                feedRaceStart = android.os.SystemClock.uptimeMillis();
+                stage.removeCallbacks(feedRace);
+                stage.postDelayed(feedRace, FEED_RACE_MS);
+            }
+        } else {
+            feedNote("preload not possible, warming only " + target.getUrl());
+            com.orvid.play.Warm.prepare(target.getUrl());
+        }
+        StreamInfoItem after = feedPick(target, false);
+        if (after == null) return;
+        feedHint = after;
+        com.orvid.play.Warm.link(after.getUrl());
+        if (!Fetch.torMode() && Visionos.videoId(after.getUrl()) != null) return;
+        com.orvid.play.Warm.prepare(after.getUrl(), true);
+        OrvidApp.get().images().prefetch(Ui.thumbnail(after.getThumbnails(), 640),
+                Math.min(640, getResources().getDisplayMetrics().widthPixels), after.getUrl(), true);
+    }
+
+    private static final long FEED_RACE_MS = 1200;
+    private static final long FEED_RACE_CHECK_MS = 500;
+    private static final long FEED_STUCK_MS = 3000;
+    private static final long FEED_STUCK_TOR_MS = 8000;
+    private long feedRaceStart;
+    private boolean feedRaced;
+    private StreamInfoItem feedRacing;
+
+    private static boolean fast(StreamInfoItem item) {
+        return item.getUrl() != null && Visionos.videoId(item.getUrl()) != null;
+    }
+
+    private final Runnable feedRace = new Runnable() {
+        @Override
+        public void run() {
+            StreamInfoItem slow = feedRacing;
+            if (slow == null || isFinishing() || feedLeaving) return;
+            if (feedLocked != slow) {
+                feedRacing = null;
+                return;
+            }
+            boolean resolved = FeedPreload.peek(slow.getUrl()) != null;
+            boolean drawn = resolved && peekDrawn && slow.getUrl().equals(peekPlayerUrl);
+            if (drawn) {
+                feedRacing = null;
+                return;
+            }
+            long age = android.os.SystemClock.uptimeMillis() - feedRaceStart;
+            boolean stuck = age >= (Fetch.torMode() ? FEED_STUCK_TOR_MS : FEED_STUCK_MS);
+            boolean slowResolve = !resolved && !fast(slow);
+            if (peekSide != 0 || !stuck && !slowResolve) {
+                stage.postDelayed(this, FEED_RACE_CHECK_MS);
+                return;
+            }
+            StreamInfoItem alt = feedPick(slow, true);
+            if (alt == null && stuck) alt = feedPick(slow, false);
+            if (alt == null) {
+                stage.postDelayed(this, FEED_RACE_CHECK_MS);
+                return;
+            }
+            if (!FeedPreload.start(getApplicationContext(), alt)) {
+                feedRacing = null;
+                return;
+            }
+            feedRacing = null;
+            feedRaced = true;
+            feedLocked = alt;
+            feedLinked = alt;
+            if (stuck) feedShown(slow.getUrl());
+            else feedHint = slow;
+            feedNote("preload " + (stuck ? "stuck" : "slow") + ", switched to " + alt.getUrl());
+            attachPeekWhenReady(alt.getUrl());
         }
     };
 
@@ -1260,6 +2057,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     }
 
     private static final int RELATED_MIN = 16;
+    private static final int TAGS_WAIT_MS = 4000;
     private static final int LATE_SEARCH_S = 30;
     private final List<StreamInfoItem> relatedSpare = java.util.Collections.synchronizedList(new ArrayList<>());
 
@@ -1267,7 +2065,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                                              List<StreamInfoItem> search, boolean trustNext) {
         List<StreamInfoItem> spare = new ArrayList<>();
         List<StreamInfoItem> out = com.orvid.search.Ranker.similar(basis, channel, pageUrl, next, search,
-                trustNext, RELATED_MIN, spare);
+                trustNext, RELATED_MIN, spare, relatedHints(basis));
         relatedSpare.addAll(spare);
         return out;
     }
@@ -1366,6 +2164,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     private void relatedDone() {
         if (relatedPending > 0) relatedPending--;
         if (relatedPending > 0 || isFinishing()) return;
+        stage.post(this::feedArrived);
         if (related.getCount() > 0) {
             padRelated();
             return;
@@ -1435,7 +2234,21 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
     }
 
     private String relatedKeys(String title) {
-        return com.orvid.search.Ranker.relatedQuery(title, seed);
+        return com.orvid.search.Ranker.relatedQuery(title, seed, relatedHints(title));
+    }
+
+    private volatile List<String> relatedTags = java.util.Collections.emptyList();
+    private volatile CharSequence relatedAbout = "";
+
+    private void setRelatedTopic(List<String> tags, CharSequence about) {
+        relatedTags = tags == null ? java.util.Collections.<String>emptyList() : new ArrayList<>(tags);
+        relatedAbout = about == null ? "" : about.toString();
+    }
+
+    private com.orvid.search.Ranker.Hints relatedHints(String basis) {
+        com.orvid.search.Ranker.Hints h = com.orvid.search.Ranker.hints(basis, relatedTags, relatedAbout);
+        if (!h.isEmpty()) Diag.mark("related hints " + h);
+        return h;
     }
 
     private void loadRelatedElsewhere() {
@@ -1466,9 +2279,16 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 String c = Visionos.takeCircuit();
                 String basis = videoId != null || seed == null || seed.trim().isEmpty() ? title : seed.trim();
                 if (own instanceof com.orvid.ext.ExtSource) {
+                    java.util.concurrent.Future<List<String>> pending = RELATED_POOL.submit(() -> {
+                        List<String> found = Fetch.retrying(c, cc -> ((com.orvid.ext.ExtSource) own).tags(cc, pageUrl));
+                        if (!found.isEmpty()) setRelatedTopic(found, title);
+                        return found;
+                    });
                     try {
-                        List<String> tags = Fetch.retrying(c, cc -> ((com.orvid.ext.ExtSource) own).tags(cc, pageUrl));
+                        List<String> tags = pending.get(TAGS_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
                         if (!tags.isEmpty()) basis = String.join(" ", tags.subList(0, Math.min(3, tags.size())));
+                    } catch (java.util.concurrent.TimeoutException e) {
+                        Diag.mark("related tags late");
                     } catch (Exception e) {
                         Diag.mark("related tags FAIL " + e);
                     }
@@ -1615,6 +2435,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         for (StreamInfoItem i : now) shownHere.add(i.getUrl());
         related.add(now);
         if (nextWarmed) linkAhead(related.items());
+        feedArrived();
     }
 
     private void appendRelated(List<StreamInfoItem> items) {
@@ -1817,7 +2638,8 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                     });
                 }
                 return com.orvid.search.Ranker.similar(title, channel, pageUrl,
-                        java.util.Collections.<StreamInfoItem>emptyList(), runAll(jobs, null), false, RELATED_MIN);
+                        java.util.Collections.<StreamInfoItem>emptyList(), runAll(jobs, null), false, RELATED_MIN,
+                        null, relatedHints(title));
             }
 
             @Override
@@ -1890,7 +2712,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             @Override
             protected void fail(Exception error) {
                 Diag.mark("twitch FAIL " + error);
-                buffering.setVisibility(View.GONE);
+                setBuffering(false);
                 showError(Ui.error(PlayerActivity.this, error));
             }
         }.start();
@@ -2017,15 +2839,8 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         }
         ((TextView) header.findViewById(R.id.uploader)).setText(d.author);
         ((TextView) header.findViewById(R.id.sub)).setText("");
-        CircuitDataSource.Factory data = new CircuitDataSource.Factory(circuit, Fetch.USER_AGENT, d.referer).cookie(d.cookie)
-                .timeout(slowSource ? SLOW_MEDIA_TIMEOUT_MS : 0);
         sources.clear();
-        sources.add(directSource(data, d.url, d.hls, d.dash));
-        if (d.fallback != null) {
-            MediaItem backup = MediaItem.fromUri(d.fallback);
-            sources.add(d.fallbackHls ? new HlsMediaSource.Factory(data).createMediaSource(backup)
-                    : new ProgressiveMediaSource.Factory(data).createMediaSource(backup));
-        }
+        sources.addAll(directSources(d, circuit, slowSource, pageUrl));
         fileUrl = d.url;
         pendingSprite = d.sprite;
         if (pendingSprite != null && pendingSprite.referer == null) pendingSprite.referer = d.referer;
@@ -2034,7 +2849,26 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
 
     private String fileUrl;
 
+    static List<MediaSource> directSources(com.orvid.play.Direct d, String circuit, boolean slow, String page) {
+        androidx.media3.datasource.DataSource.Factory data = FeedCache.wrap(
+                new CircuitDataSource.Factory(circuit, Fetch.USER_AGENT, d.referer).cookie(d.cookie)
+                        .timeout(slow ? SLOW_MEDIA_TIMEOUT_MS : 0), page);
+        List<MediaSource> out = new ArrayList<>();
+        out.add(directSource(d, data, d.url, d.hls, d.dash));
+        if (d.fallback != null) {
+            MediaItem backup = MediaItem.fromUri(d.fallback);
+            out.add(d.fallbackHls ? new HlsMediaSource.Factory(data).createMediaSource(backup)
+                    : new ProgressiveMediaSource.Factory(data).createMediaSource(backup));
+        }
+        return out;
+    }
+
     private MediaSource directSource(CircuitDataSource.Factory data, String url, boolean hls, boolean dash) {
+        return directSource(directMedia, data, url, hls, dash);
+    }
+
+    private static MediaSource directSource(com.orvid.play.Direct directMedia, androidx.media3.datasource.DataSource.Factory data,
+                                            String url, boolean hls, boolean dash) {
         if (directMedia == null || directMedia.subtitles.isEmpty()) {
             MediaItem item = MediaItem.fromUri(url);
             return hls ? new HlsMediaSource.Factory(data).createMediaSource(item)
@@ -2125,7 +2959,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                         ? error.getCause() : error;
                 if (cause instanceof com.orvid.net.Hedge.Final) {
                     Diag.mark("prepared stream FAIL " + cause + ", final");
-                    buffering.setVisibility(View.GONE);
+                    setBuffering(false);
                     showError(Ui.error(PlayerActivity.this, cause));
                     return;
                 }
@@ -2153,7 +2987,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
 
             @Override
             protected void fail(Exception error) {
-                buffering.setVisibility(View.GONE);
+                setBuffering(false);
                 showError(Ui.error(PlayerActivity.this, error));
             }
         }.start();
@@ -2177,6 +3011,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 ((TextView) header.findViewById(R.id.uploader)).setText(m.author);
                 ((TextView) header.findViewById(R.id.sub)).setText("Internet Archive");
                 description.setText(m.description);
+                setRelatedTopic(null, m.description);
                 CircuitDataSource.Factory data = new CircuitDataSource.Factory(circuit, Fetch.USER_AGENT);
                 sources.clear();
                 sources.add(new ProgressiveMediaSource.Factory(data).createMediaSource(MediaItem.fromUri(m.mp4)));
@@ -2186,7 +3021,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             @Override
             protected void fail(Exception error) {
                 Diag.mark("archive FAIL " + error);
-                buffering.setVisibility(View.GONE);
+                setBuffering(false);
                 showError(Ui.error(PlayerActivity.this, error));
             }
         }.start();
@@ -2211,6 +3046,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 ((TextView) header.findViewById(R.id.sub)).setText(
                         m.views >= 0 ? getString(R.string.views, Ui.count(m.views)) : "");
                 description.setText(m.description);
+                setRelatedTopic(null, m.description);
                 CircuitDataSource.Factory data = new CircuitDataSource.Factory(circuit, Fetch.USER_AGENT);
                 sources.clear();
                 if (m.hls != null) sources.add(new HlsMediaSource.Factory(data).createMediaSource(MediaItem.fromUri(m.hls)));
@@ -2221,7 +3057,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             @Override
             protected void fail(Exception error) {
                 Diag.mark("peertube FAIL " + error);
-                buffering.setVisibility(View.GONE);
+                setBuffering(false);
                 showError(Ui.error(PlayerActivity.this, error));
             }
         }.start();
@@ -2247,6 +3083,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 ((TextView) header.findViewById(R.id.sub)).setText(
                         v.views >= 0 ? getString(R.string.views, Ui.count(v.views)) : "");
                 description.setText(v.description);
+                setRelatedTopic(null, v.description);
                 CircuitDataSource.Factory data = new CircuitDataSource.Factory(circuit, com.orvid.vk.Vk.USER_AGENT);
                 sources.clear();
                 String hls = v.files.containsKey("hls") ? v.files.get("hls") : v.files.get("hls_ondemand");
@@ -2263,7 +3100,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 }
                 if (mp4 != null) sources.add(new ProgressiveMediaSource.Factory(data).createMediaSource(MediaItem.fromUri(mp4)));
                 if (sources.isEmpty()) {
-                    buffering.setVisibility(View.GONE);
+                    setBuffering(false);
                     showError(getString(R.string.error_playback));
                     return;
                 }
@@ -2273,7 +3110,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             @Override
             protected void fail(Exception error) {
                 Diag.mark("vk FAIL " + error);
-                buffering.setVisibility(View.GONE);
+                setBuffering(false);
                 showError(Ui.error(PlayerActivity.this, error));
             }
         }.start();
@@ -2296,6 +3133,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                 ((TextView) header.findViewById(R.id.uploader)).setText(v.author);
                 ((TextView) header.findViewById(R.id.sub)).setText(R.string.source_dailymotion);
                 description.setText(v.description);
+                setRelatedTopic(null, v.description);
                 sources.clear();
                 sources.add(new HlsMediaSource.Factory(new CircuitDataSource.Factory(c0, Fetch.USER_AGENT))
                         .createMediaSource(MediaItem.fromUri(v.hls)));
@@ -2305,7 +3143,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             @Override
             protected void fail(Exception error) {
                 Diag.mark("dailymotion FAIL " + error);
-                buffering.setVisibility(View.GONE);
+                setBuffering(false);
                 showError(Ui.error(PlayerActivity.this, error));
             }
         }.start();
@@ -2332,8 +3170,12 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             @Override
             protected void fail(Exception error) {
                 Diag.mark("newpipe FAIL " + error);
+                if (error instanceof org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
+                        && Visionos.removed(error.getMessage())) {
+                    com.orvid.search.Dead.add(pageUrl);
+                }
                 if (!forPlayback) return;
-                buffering.setVisibility(View.GONE);
+                setBuffering(false);
                 showError(error instanceof ExtractionException && error.getMessage() != null
                         && error.getMessage().startsWith("No service")
                         ? getString(R.string.error_unsupported)
@@ -2348,10 +3190,11 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         ((TextView) header.findViewById(R.id.sub)).setText(Ui.joinParts(views, info.getTextualUploadDate()));
         String text = info.getDescription() == null ? "" : info.getDescription().getContent();
         if (!text.isEmpty()) description.setText(Html.fromHtml(text, Html.FROM_HTML_MODE_COMPACT));
+        setRelatedTopic(info.getTags(), Html.fromHtml(text, Html.FROM_HTML_MODE_COMPACT));
         List<StreamInfoItem> more = new ArrayList<>();
         for (InfoItem i : info.getRelatedItems()) if (i instanceof StreamInfoItem) more.add((StreamInfoItem) i);
         more = com.orvid.search.Ranker.similar(info.getName(), info.getUploaderName(), pageUrl, more,
-                java.util.Collections.<StreamInfoItem>emptyList(), true);
+                java.util.Collections.<StreamInfoItem>emptyList(), true, 0, null, relatedHints(info.getName()));
         appendRelated(more);
         if (!forPlayback) return;
 
@@ -2375,7 +3218,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
                     .createMediaSource(MediaItem.fromUri(best.getContent())));
         }
         if (sources.isEmpty()) {
-            buffering.setVisibility(View.GONE);
+            setBuffering(false);
             showError(getString(R.string.error_playback));
             return;
         }
@@ -2413,9 +3256,21 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
             streamStarted = true;
             if (((TextView) header.findViewById(R.id.name)).length() > 0) stage.post(this::loadRelated);
         }
-        buffering.setVisibility(View.VISIBLE);
-        player.setMediaSource(sources.get(sourceIndex), positionMs);
-        player.prepare();
+        boolean adopted = handoff && sourceIndex == 0 && player.getPlayerError() == null;
+        handoff = false;
+        if (adopted) {
+            boolean ready = player.getPlaybackState() == Player.STATE_READY;
+            Diag.mark("player adopted preload, " + (ready ? "ready" : "buffering"));
+            setBuffering(!ready);
+            if (ready) applySprite();
+            stage.postDelayed(adoptCheck, ADOPT_CHECK_MS);
+            if (positionMs > 0) player.seekTo(positionMs);
+            if (player.getPlaybackState() == Player.STATE_IDLE) player.prepare();
+        } else {
+            setBuffering(true);
+            player.setMediaSource(sources.get(sourceIndex), positionMs);
+            player.prepare();
+        }
         player.setPlayWhenReady(!onTv);
         if (cast.active() && !onTv) stage.post(() -> {
             if (!onTv) castHere(positionMs);
@@ -2550,7 +3405,7 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         if (++sourceIndex < sources.size()) {
             play(at);
         } else {
-            buffering.setVisibility(View.GONE);
+            setBuffering(false);
             showError(getString(R.string.error_playback));
         }
     }
@@ -2640,28 +3495,122 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         controls.refreshFullscreenIcon();
     }
 
+    private boolean feed;
+    private boolean feedLooped;
+    private TextView feedInfo;
+
+    void refreshLayout() {
+        applyLayout(getResources().getConfiguration().orientation);
+    }
+
+    private void buildFeedInfo() {
+        feedInfo = new TextView(this);
+        feedInfo.setTextColor(0xFFFFFFFF);
+        feedInfo.setTextSize(14);
+        feedInfo.setMaxLines(4);
+        feedInfo.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        feedInfo.setShadowLayer(Ui.dp(this, 3), 0, Ui.dp(this, 1), 0xCC000000);
+        feedInfo.setVisibility(View.GONE);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, android.view.Gravity.BOTTOM | android.view.Gravity.START);
+        int side = Ui.dp(this, 16);
+        lp.setMargins(side, 0, Ui.dp(this, 72), Ui.dp(this, 64));
+        stage.addView(feedInfo, stage.indexOfChild(findViewById(R.id.subtitle)) + 1, lp);
+        feedPeekBox = new FrameLayout(this);
+        feedPeekBox.setBackgroundColor(getColor(R.color.player_bg));
+        feedPeekBox.setVisibility(View.INVISIBLE);
+        feedPeek = new ImageView(this);
+        feedPeek.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        feedPeekBox.addView(feedPeek, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        peekVideo = new android.view.TextureView(this);
+        peekVideo.setVisibility(View.GONE);
+        feedPeekBox.addView(peekVideo, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT, android.view.Gravity.CENTER));
+        stage.addView(feedPeekBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        stage.setClipChildren(false);
+        feedWait = new android.widget.ProgressBar(this);
+        feedWait.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(0xFFFFFFFF));
+        feedWait.setVisibility(View.GONE);
+        int spin = Ui.dp(this, 28);
+        FrameLayout.LayoutParams wp = new FrameLayout.LayoutParams(spin, spin,
+                android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL);
+        wp.bottomMargin = Ui.dp(this, 24);
+        stage.addView(feedWait, stage.indexOfChild(feedInfo) + 1, wp);
+        android.text.TextWatcher watch = new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                fillFeedInfo();
+            }
+        };
+        ((TextView) header.findViewById(R.id.name)).addTextChangedListener(watch);
+        ((TextView) header.findViewById(R.id.uploader)).addTextChangedListener(watch);
+        fillFeedInfo();
+    }
+
+    private void fillFeedInfo() {
+        String channel = ((TextView) header.findViewById(R.id.uploader)).getText().toString().trim();
+        String title = ((TextView) header.findViewById(R.id.name)).getText().toString().trim();
+        android.text.SpannableStringBuilder text = new android.text.SpannableStringBuilder();
+        if (!channel.isEmpty()) {
+            text.append(channel);
+            text.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, text.length(), 0);
+            if (!title.isEmpty()) text.append('\n');
+        }
+        text.append(title);
+        feedInfo.setText(text);
+    }
+
     private void applyLayout(int orientation) {
         boolean landscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
+        boolean swipeMode = OrvidApp.get().swipeMode();
+        feed = swipeMode;
+        if (!feed && feedPeekBox != null) {
+            stage.removeCallbacks(peekAttach);
+            feedPeekBox.setVisibility(View.INVISIBLE);
+        }
         View row = findViewById(R.id.stage_row);
+        ((ViewGroup) row).setClipChildren(!feed && landscape);
         ViewGroup.LayoutParams lp = row.getLayoutParams();
         int width = getResources().getDisplayMetrics().widthPixels;
-        lp.height = landscape ? LinearLayout.LayoutParams.MATCH_PARENT : width * 9 / 16;
+        lp.height = landscape || feed ? LinearLayout.LayoutParams.MATCH_PARENT : width * 9 / 16;
         row.setLayoutParams(lp);
         if (!landscape) side.close(false);
-        details.setVisibility(landscape ? View.GONE : View.VISIBLE);
-        if (sheet != null) sheet.setDragEnabled(!landscape);
+        details.setVisibility(landscape || feed ? View.GONE : View.VISIBLE);
+        if (sheet != null) sheet.setDragEnabled(!landscape && !feed);
+        feedInfo.setVisibility(swipeMode && !landscape ? View.VISIBLE : View.GONE);
+        if (feed) feedShown(pageUrl);
+        if (swipeMode) poster.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        if (swipeMode && player.getRepeatMode() == Player.REPEAT_MODE_OFF) {
+            player.setRepeatMode(Player.REPEAT_MODE_ONE);
+            feedLooped = true;
+        } else if (!swipeMode && feedLooped) {
+            player.setRepeatMode(Player.REPEAT_MODE_OFF);
+            feedLooped = false;
+        }
+        stage.setTranslationY(0);
         stage.post(this::fitSurface);
+        boolean immersive = landscape || feed;
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController insets = getWindow().getInsetsController();
             if (insets == null) return;
-            if (landscape) {
+            if (immersive) {
                 insets.hide(WindowInsets.Type.systemBars());
                 insets.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             } else {
                 insets.show(WindowInsets.Type.systemBars());
             }
         } else {
-            getWindow().getDecorView().setSystemUiVisibility(landscape
+            getWindow().getDecorView().setSystemUiVisibility(immersive
                     ? View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                     : 0);
@@ -2720,15 +3669,54 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         com.orvid.net.Focus.hold(false);
     }
 
+    private boolean stopped;
+    private boolean playOnReturn;
+
     @Override
     protected void onStop() {
         super.onStop();
-        if (!isFinishing() && !minimizing) player.pause();
+        if (!isFinishing() && !minimizing) {
+            stopped = true;
+            playOnReturn = feed && player.getPlayWhenReady();
+            player.pause();
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (!stopped) return;
+        stopped = false;
+        if (!feedLeaving && stage.getTranslationY() != 0) {
+            stage.animate().cancel();
+            stage.setTranslationY(0);
+            stage.setAlpha(1f);
+            feedRest();
+        }
+        if (playOnReturn) {
+            playOnReturn = false;
+            player.play();
+        } else {
+            surface.post(this::redrawPaused);
+        }
+    }
+
+    private int redrawTries;
+
+    private void redrawPaused() {
+        if (isFinishing() || player.isPlaying()) return;
+        if (!surface.isAvailable() || player.getPlaybackState() != Player.STATE_READY) {
+            if (++redrawTries < 30) surface.postDelayed(this::redrawPaused, 33);
+            return;
+        }
+        redrawTries = 0;
+        player.seekTo(player.getCurrentPosition());
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (feedEnter == 0) FeedPreload.drop();
         jobScope.cancel();
         relatedScope.cancel();
         rememberShown();
@@ -2738,6 +3726,16 @@ public final class PlayerActivity extends Activity implements com.orvid.app.Job.
         Diag.listen(null);
         stage.removeCallbacks(sampler);
         stage.removeCallbacks(stallWatch);
+        stage.removeCallbacks(adoptCheck);
+        stage.removeCallbacks(peekAttach);
+        stage.removeCallbacks(feedRace);
+        peekVideo.removeCallbacks(peekRedraw);
+        peekVideo.removeCallbacks(capturePeek);
+        if (peekPlayer != null) {
+            peekPlayer.removeListener(peekListener);
+            if (peekSurface != null) peekPlayer.clearVideoSurface(peekSurface);
+        }
+        surface.removeCallbacks(posterCheck);
         controls.release();
         cast.removeListener(this);
         castPanel.hide();

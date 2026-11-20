@@ -153,6 +153,7 @@
     <string name="queued">대기열: %1$d개</string>
     <string name="autoplay">자동 재생</string>
     <string name="loop">반복</string>
+    <string name="swipe_mode">스와이프 모드</string>
     <string name="up_next">%1$d초 후 다음: %2$s
 탭하여 취소</string>
     <string name="block_screenshots">스크린샷 및 화면 녹화 차단</string>
@@ -180,6 +181,11 @@
     <string name="share">공유</string>
     <string name="hide_known">이미 봤어요</string>
     <string name="hide_known_done">숨겼습니다. 결과에 다시 표시되지 않습니다.</string>
-    <string name="hidden_videos">숨긴 동영상</string>
-    <string name="hidden_clear">숨긴 동영상 다시 표시 (%d)</string>
+    <string name="your_data">내 데이터</string>
+    <string name="data_clear">데이터 삭제</string>
+    <string name="data_clear_message">‘이미 봤어요’로 표시한 동영상이 다시 표시됩니다.</string>
+    <string name="data_clear_confirm">삭제</string>
+    <plurals name="result_count">
+        <item quantity="other">결과 %d개</item>
+    </plurals>
 </resources>

@@ -37,6 +37,7 @@ final class Commons extends Site {
             if (vi.isEmpty()) continue;
             JsonObject v = vi.getObject(0);
             String title = pg.getString("title", "").replaceFirst("^File:", "").replaceFirst("\\.[A-Za-z0-9]+$", "");
+            if (adult(title)) continue;
             StreamInfoItem item = item(v.getString("descriptionurl", ""), title, v.getString("user", ""),
                     (long) v.getDouble("duration", -1), -1, v.getString("thumburl", null));
             com.orvid.search.Dates.set(item, v.getString("timestamp", null));

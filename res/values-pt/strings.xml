@@ -153,6 +153,7 @@
     <string name="queued">Na fila: %1$d</string>
     <string name="autoplay">Reprodução automática</string>
     <string name="loop">Repetir</string>
+    <string name="swipe_mode">Modo deslizar</string>
     <string name="up_next">A seguir em %1$d: %2$s
 Toque para cancelar</string>
     <string name="block_screenshots">Bloquear capturas e gravação de tela</string>
@@ -180,6 +181,12 @@ Toque para cancelar</string>
     <string name="share">Compartilhar</string>
     <string name="hide_known">Já vi este</string>
     <string name="hide_known_done">Ocultado. Não vai aparecer de novo nos resultados.</string>
-    <string name="hidden_videos">Vídeos ocultos</string>
-    <string name="hidden_clear">Mostrar vídeos ocultos de novo (%d)</string>
+    <string name="your_data">Seus dados</string>
+    <string name="data_clear">Apagar dados</string>
+    <string name="data_clear_message">Os vídeos marcados como “Já vi este” voltarão a aparecer.</string>
+    <string name="data_clear_confirm">Apagar</string>
+    <plurals name="result_count">
+        <item quantity="one">%d resultado</item>
+        <item quantity="other">%d resultados</item>
+    </plurals>
 </resources>
