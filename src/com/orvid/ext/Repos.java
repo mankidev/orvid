@@ -55,8 +55,7 @@ public final class Repos {
     }
 
     private static String canonical(String url) {
-        return url.replace("://raw.githubusercontent.com/DavutKaraoglan/", "://raw.githubusercontent.com/mankidev/")
-                .replace("/mankidev/orvid-sources-secret/", "/mankidev/orvid-sources-adult/");
+        return url.replace("/mankidev/orvid-sources-secret/", "/mankidev/orvid-sources-adult/");
     }
 
     public static List<Link> suggested(File root) {
